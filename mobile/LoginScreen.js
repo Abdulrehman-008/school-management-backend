@@ -12,41 +12,41 @@ import {
 } from 'react-native';
 
 export default function LoginScreen() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Active Ngrok Endpoint Path
-const API_URL = "https://school-management-backend-pg5b8ji0b-inovatters.vercel.app";
+  // Vercel Production Base Endpoint
+  const API_URL = "https://school-management-backend-pg5b8ji0b-inovatters.vercel.app";
 
   const handleLogin = async () => {
-    if (!username || !password) {
-      Alert.alert('Error', 'Username aur password enter karein.');
+    if (!email || !password) {
+      Alert.alert('Error', 'Email/Username aur password enter karein.');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch(API_URL, {
+      // 1. Endpoint path fix (/api/auth/login)
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': '69420',
-          'User-Agent': 'Custom-Mobile-App-Client'
         },
-        body: JSON.stringify({ username, password })
+        // 2. Payload fix (email & password)
+        body: JSON.stringify({ email, password })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert('Success', `Welcome ${data.user?.name || username}!`);
+        Alert.alert('Success', `Welcome ${data.user?.name || email}!`);
       } else {
         Alert.alert('Login Failed', data.message || 'Invalid Credentials');
       }
     } catch (error) {
       console.log('Fetch Error Log:', error.message);
-      Alert.alert('Network Error', 'Backend server connect nahi ho raha. Check terminal connection.');
+      Alert.alert('Network Error', 'Backend server connect nahi ho raha. Internet check karein.');
     } finally {
       setLoading(false);
     }
@@ -63,13 +63,14 @@ const API_URL = "https://school-management-backend-pg5b8ji0b-inovatters.vercel.a
           <Text style={styles.subtitle}>Sign in to continue</Text>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Username</Text>
+            <Text style={styles.label}>Email / Username</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter username"
-              value={username}
-              onChangeText={setUsername}
+              placeholder="Enter email or username"
+              value={email}
+              onChangeText={setEmail}
               autoCapitalize="none"
+              keyboardType="email-address"
             />
           </View>
 
@@ -102,7 +103,7 @@ const API_URL = "https://school-management-backend-pg5b8ji0b-inovatters.vercel.a
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justify: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
     padding: 20,
