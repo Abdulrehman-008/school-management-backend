@@ -17,7 +17,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   // Active Ngrok Endpoint Path
-const API_URL = 'https://pumice-pushiness-tingling.ngrok-free.dev/api/auth/login';
+const API_URL = "https://school-management-backend-pg5b8ji0b-inovatters.vercel.app";
 
   const handleLogin = async () => {
     if (!username || !password) {
