@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, login } = require('../controllers/authController');
+const { register, login, getTeachers } = require('../controllers/authController');
 
 // Test GET route to verify endpoint reachability
 router.get('/login', (req, res) => {
@@ -14,5 +14,6 @@ router.get('/health', (req, res) => {
 // Authentication endpoints
 router.post('/register', register);
 router.post('/login', login);
+router.get('/teachers', getTeachers);
 
 module.exports = router;

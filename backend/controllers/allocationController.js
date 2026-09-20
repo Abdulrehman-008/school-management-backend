@@ -31,3 +31,24 @@ exports.getTeacherAllocations = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
+// 3. Get All Allocations (Admin view — all teachers with their classes and subjects)
+exports.getAllAllocations = async (req, res) => {
+    try {
+        const query = `
+            SELECT ta.id, u.id as teacher_id, u.name as teacher_name, u.username,
+                   c.id as class_id, c.class_name,
+                   s.id as subject_id, s.subject_name
+            FROM teacher_allocations ta
+            JOIN users u ON ta.teacher_id = u.id
+            JOIN classes c ON ta.class_id = c.id
+            JOIN subjects s ON ta.subject_id = s.id
+            ORDER BY u.name ASC, c.class_name ASC
+        `;
+        const allocations = await pool.query(query);
+        res.json(allocations.rows);
+    } catch (err) {
+        console.error('Get All Allocations Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};

@@ -10,55 +10,59 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import { saveSession } from './src/services/authStorage';
 
-export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+export default function LoginScreen({ navigation }) {
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Vercel Production Base Endpoint
-  const API_URL = "https://school-management-backend-inovatters.vercel.app";
+  const API_URL = 'https://school-management-backend-inovatters.vercel.app';
 
   const handleLogin = async () => {
-    const trimmedInput = email.trim();
+    const trimmedInput = identifier.trim();
     if (!trimmedInput || !password) {
-      Alert.alert('Error', 'Email/Username aur password enter karein.');
+      Alert.alert('Error', 'Please enter username and password.');
       return;
     }
 
     setLoading(true);
     try {
-      console.log('Sending login request to:', `${API_URL}/api/auth/login`);
       const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        // Send both username and email to be fully compatible with backend
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: trimmedInput,
           email: trimmedInput,
-          password: password,
+          password,
         }),
       });
 
       const data = await response.json().catch(() => ({}));
-      console.log('Response Status:', response.status);
-      console.log('Response Data:', data);
 
       if (response.ok) {
-        Alert.alert('Success', `Welcome ${data.user?.name || data.user?.username || trimmedInput}!`);
-      } else if (response.status === 401 && (data.protection || data.error?.message === 'Protected deployment')) {
+        await saveSession(data.token, data.user);
+
+        if (data.user?.role === 'admin') {
+          navigation.replace('AdminDashboard');
+        } else if (data.user?.role === 'teacher') {
+          navigation.replace('TeacherDashboard');
+        } else {
+          Alert.alert('Login Error', 'Unknown role. Contact administrator.');
+        }
+      } else if (
+        response.status === 401 &&
+        (data.protection || data.error?.message === 'Protected deployment')
+      ) {
         Alert.alert(
-          'Vercel Authentication Active',
-          'Vercel Deployment Protection is blocking this API. Please disable Vercel Authentication in your Vercel Dashboard Settings -> Deployment Protection.'
+          'Vercel Protection Active',
+          'Disable Deployment Protection in Vercel Dashboard → Settings → Deployment Protection.'
         );
       } else {
-        Alert.alert('Login Failed', data.message || data.error || 'Invalid Credentials');
+        Alert.alert('Login Failed', data.message || data.error || 'Invalid credentials.');
       }
     } catch (error) {
-      console.log('Fetch Error Log:', error.message);
-      Alert.alert('Network Error', 'Backend server connect nahi ho raha. Internet aur backend status check karein.');
+      Alert.alert('Network Error', 'Cannot reach the server. Check your internet connection.');
     } finally {
       setLoading(false);
     }
@@ -71,18 +75,18 @@ export default function LoginScreen() {
     >
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.card}>
-          <Text style={styles.title}>School Management App</Text>
+          <Text style={styles.title}>School Management</Text>
           <Text style={styles.subtitle}>Sign in to continue</Text>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email / Username</Text>
+            <Text style={styles.label}>Username</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter email or username"
-              value={email}
-              onChangeText={setEmail}
+              placeholder="Enter username"
+              value={identifier}
+              onChangeText={setIdentifier}
               autoCapitalize="none"
-              keyboardType="email-address"
+              autoCorrect={false}
             />
           </View>
 
@@ -98,12 +102,12 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity
-            style={styles.button}
+            style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
           >
             <Text style={styles.buttonText}>
-              {loading ? 'Logging in...' : 'LOGIN'}
+              {loading ? 'Signing in...' : 'SIGN IN'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -117,63 +121,63 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f0f4ff',
     padding: 20,
   },
   card: {
     width: '100%',
     maxWidth: 400,
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 24,
-    elevation: 4,
+    borderRadius: 16,
+    padding: 28,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#333333',
+    color: '#1a237e',
     textAlign: 'center',
     marginBottom: 6,
   },
   subtitle: {
     fontSize: 14,
-    color: '#666666',
+    color: '#666',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
   },
-  inputContainer: {
-    marginBottom: 16,
-  },
+  inputContainer: { marginBottom: 18 },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#444444',
+    color: '#444',
     marginBottom: 6,
   },
   input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#cccccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    height: 50,
+    borderWidth: 1.5,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingHorizontal: 14,
     fontSize: 16,
     backgroundColor: '#fafafa',
   },
   button: {
-    height: 48,
-    backgroundColor: '#007bff',
-    borderRadius: 8,
+    height: 50,
+    backgroundColor: '#1a237e',
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 8,
   },
+  buttonDisabled: { opacity: 0.6 },
   buttonText: {
-    color: '#ffffff',
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    letterSpacing: 1,
   },
 });

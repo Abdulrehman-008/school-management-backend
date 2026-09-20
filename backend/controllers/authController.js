@@ -84,3 +84,16 @@ exports.login = async (req, res) => {
         res.status(500).json({ message: 'Internal server error', error: err.message });
     }
 };
+
+// 3. Get All Teachers (for Admin to list & allocate)
+exports.getTeachers = async (req, res) => {
+    try {
+        const teachers = await pool.query(
+            "SELECT id, name, username, phone, role, created_at FROM users WHERE role = 'teacher' ORDER BY name ASC"
+        );
+        res.json(teachers.rows);
+    } catch (err) {
+        console.error('Get Teachers Error:', err);
+        res.status(500).json({ message: 'Failed to fetch teachers', error: err.message });
+    }
+};
