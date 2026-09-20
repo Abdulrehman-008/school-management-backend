@@ -33,7 +33,6 @@ export default function ManageTeachersScreen({ navigation }) {
   const [tUsername, setTUsername] = useState('');
   const [tPhone, setTPhone] = useState('');
   const [tPassword, setTPassword] = useState('');
-  const [tRole, setTRole] = useState('teacher');
   const [savingTeacher, setSavingTeacher] = useState(false);
 
   // Multi-Class Multi-Subject Allocate Modal
@@ -42,7 +41,6 @@ export default function ManageTeachersScreen({ navigation }) {
   const [activeClass, setActiveClass] = useState(null);
   const [classSubjects, setClassSubjects] = useState([]);
   const [selectedSubjectIds, setSelectedSubjectIds] = useState([]);
-  // Staging list: array of { class_id, class_name, subjects: [{ id, name }] }
   const [stagedAllocations, setStagedAllocations] = useState([]);
   const [savingAlloc, setSavingAlloc] = useState(false);
 
@@ -78,7 +76,6 @@ export default function ManageTeachersScreen({ navigation }) {
     setTUsername('');
     setTPhone('');
     setTPassword('');
-    setTRole('teacher');
     setTeacherModal(true);
   };
 
@@ -89,7 +86,6 @@ export default function ManageTeachersScreen({ navigation }) {
     setTUsername(teacher.username || '');
     setTPhone(teacher.phone || '');
     setTPassword('');
-    setTRole(teacher.role || 'teacher');
     setTeacherModal(true);
   };
 
@@ -114,12 +110,13 @@ export default function ManageTeachersScreen({ navigation }) {
           return;
         }
 
+        // Register teacher strictly as role 'teacher'
         await api.post('/auth/register', {
           name: tName.trim(),
           username: tUsername.trim(),
           phone: tPhone.trim(),
           password: tPassword.trim(),
-          role: tRole,
+          role: 'teacher',
         });
         Alert.alert('Success', 'Teacher registered successfully!');
       }
@@ -194,7 +191,6 @@ export default function ManageTeachersScreen({ navigation }) {
       .filter((s) => selectedSubjectIds.includes(s.id))
       .map((s) => ({ id: s.id, name: s.subject_name }));
 
-    // Check if class already staged, merge subjects
     const existingIndex = stagedAllocations.findIndex((item) => item.class_id === activeClass.id);
     let updatedStaged = [...stagedAllocations];
 
@@ -232,7 +228,6 @@ export default function ManageTeachersScreen({ navigation }) {
   };
 
   const handleSaveAllAllocations = async () => {
-    // If user has selections in current class but forgot to click Add, include them
     let finalStaged = [...stagedAllocations];
     if (activeClass && selectedSubjectIds.length > 0) {
       const chosen = classSubjects
@@ -307,14 +302,7 @@ export default function ManageTeachersScreen({ navigation }) {
       <View style={styles.card}>
         <View style={styles.cardTop}>
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.cardName}>{item.name}</Text>
-              {item.role === 'class_teacher' && (
-                <View style={styles.roleBadge}>
-                  <Text style={styles.roleBadgeText}>Class Incharge</Text>
-                </View>
-              )}
-            </View>
+            <Text style={styles.cardName}>{item.name}</Text>
             <Text style={styles.cardUsername}>@{item.username} • {item.phone || 'No phone'}</Text>
           </View>
 
@@ -431,26 +419,6 @@ export default function ManageTeachersScreen({ navigation }) {
                     onChangeText={setTPassword}
                     secureTextEntry
                   />
-
-                  <Text style={styles.fieldLabel}>Role Type</Text>
-                  <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                    <TouchableOpacity
-                      style={[styles.roleChip, tRole === 'teacher' && styles.roleChipActive]}
-                      onPress={() => setTRole('teacher')}
-                    >
-                      <Text style={[styles.roleChipText, tRole === 'teacher' && styles.roleChipTextActive]}>
-                        Subject Teacher
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.roleChip, tRole === 'class_teacher' && styles.roleChipActive]}
-                      onPress={() => setTRole('class_teacher')}
-                    >
-                      <Text style={[styles.roleChipText, tRole === 'class_teacher' && styles.roleChipTextActive]}>
-                        Class Teacher
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
                 </>
               )}
 
@@ -491,7 +459,6 @@ export default function ManageTeachersScreen({ navigation }) {
                 Assign Classes to {selTeacher?.name}
               </Text>
 
-              {/* Step 1: Class Picker */}
               <Text style={styles.fieldLabel}>1. Choose Class</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -509,7 +476,6 @@ export default function ManageTeachersScreen({ navigation }) {
                 </View>
               </ScrollView>
 
-              {/* Step 2: Subject checkboxes for selected class */}
               {activeClass && (
                 <>
                   <Text style={styles.fieldLabel}>
@@ -551,7 +517,6 @@ export default function ManageTeachersScreen({ navigation }) {
                 </>
               )}
 
-              {/* Step 3: Staged summary across multiple classes */}
               <Text style={[styles.fieldLabel, { marginTop: 10 }]}>
                 3. Total Classes & Subjects to Assign:
               </Text>
@@ -645,13 +610,6 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardName: { fontSize: 16, fontWeight: '700', color: '#222' },
   cardUsername: { fontSize: 12, color: '#888', marginTop: 2 },
-  roleBadge: {
-    backgroundColor: '#e0f2f1',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  roleBadgeText: { fontSize: 10, color: '#00695c', fontWeight: 'bold' },
   topActions: { flexDirection: 'row', gap: 8 },
   editIconBtn: {
     backgroundColor: '#e8eaf6',
@@ -722,16 +680,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: '#fafafa',
   },
-  roleChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#ccc',
-  },
-  roleChipActive: { backgroundColor: INDIGO, borderColor: INDIGO },
-  roleChipText: { color: '#555', fontSize: 13 },
-  roleChipTextActive: { color: '#fff', fontWeight: 'bold' },
   chip: {
     borderWidth: 1.5,
     borderColor: '#ddd',

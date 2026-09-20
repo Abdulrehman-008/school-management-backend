@@ -98,6 +98,7 @@ export default function ManageStudentsScreen({ navigation, route }) {
     setFatherName('');
     setSelSubject(null);
 
+    // If accessed as Class Incharge or with presetClassId, lock to that class
     if (presetClassId || selectedClass) {
       const cls = selectedClass || classes.find((c) => c.id === presetClassId);
       if (cls) onEnrollClassSelect(cls);
@@ -235,7 +236,7 @@ export default function ManageStudentsScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      {/* Dynamic Header with Status Bar padding */}
+      {/* Header with notch padding */}
       <View style={[styles.header, { paddingTop: topPadding }]}>
         <TouchableOpacity
           style={styles.headerActionBtn}
@@ -245,7 +246,9 @@ export default function ManageStudentsScreen({ navigation, route }) {
           <Text style={styles.backBtn}>‹ Back</Text>
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>{presetClassName || 'Students'}</Text>
+        <Text style={styles.headerTitle}>
+          {presetClassName ? `${presetClassName} Students` : 'Students'}
+        </Text>
 
         {!readOnly ? (
           <TouchableOpacity
@@ -260,8 +263,8 @@ export default function ManageStudentsScreen({ navigation, route }) {
         )}
       </View>
 
-      {/* Class filter (only when not in preset mode) */}
-      {!presetClassId && (
+      {/* Class filter: ONLY visible to Admin (when no presetClassId or isClassTeacher is active) */}
+      {!presetClassId && !isClassTeacher && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
           <View style={styles.filterRow}>
             <TouchableOpacity
@@ -287,7 +290,7 @@ export default function ManageStudentsScreen({ navigation, route }) {
         </ScrollView>
       )}
 
-      {/* Live search input for students */}
+      {/* Live search bar */}
       <View style={styles.searchWrap}>
         <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
@@ -361,26 +364,36 @@ export default function ManageStudentsScreen({ navigation, route }) {
                 autoCapitalize="words"
               />
 
-              <Text style={styles.fieldLabel}>Select Class *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {classes.map((c) => (
-                    <TouchableOpacity
-                      key={c.id}
-                      style={[styles.chip, selEnrollClass?.id === c.id && styles.chipSelected]}
-                      onPress={() => onEnrollClassSelect(c)}
-                    >
-                      <Text style={[styles.chipText, selEnrollClass?.id === c.id && styles.chipTextSelected]}>
-                        {c.class_name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+              {/* Class selection: If Class Incharge or presetClassId, display locked class chip */}
+              <Text style={styles.fieldLabel}>Class *</Text>
+              {isClassTeacher || presetClassId ? (
+                <View style={styles.lockedClassBadge}>
+                  <Text style={styles.lockedClassText}>
+                    {selEnrollClass?.class_name || presetClassName || 'Assigned Class'}
+                  </Text>
+                  <Text style={styles.lockedClassSub}>(Fixed for your incharge class)</Text>
                 </View>
-              </ScrollView>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {classes.map((c) => (
+                      <TouchableOpacity
+                        key={c.id}
+                        style={[styles.chip, selEnrollClass?.id === c.id && styles.chipSelected]}
+                        onPress={() => onEnrollClassSelect(c)}
+                      >
+                        <Text style={[styles.chipText, selEnrollClass?.id === c.id && styles.chipTextSelected]}>
+                          {c.class_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              )}
 
               {classSubjects.length > 0 && (
                 <>
-                  <Text style={styles.fieldLabel}>Optional Subject / Group</Text>
+                  <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Optional Subject / Group</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       {classSubjects.map((s) => (
@@ -545,6 +558,16 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     backgroundColor: '#fafafa',
   },
+  lockedClassBadge: {
+    backgroundColor: '#e0f2f1',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#b2dfdb',
+  },
+  lockedClassText: { fontSize: 16, fontWeight: 'bold', color: GREEN },
+  lockedClassSub: { fontSize: 11, color: '#004d40', marginTop: 2 },
   chip: {
     borderWidth: 1.5,
     borderColor: '#ddd',
