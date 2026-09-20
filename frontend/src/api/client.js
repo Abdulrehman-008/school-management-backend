@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-    baseURL: 'http://10.0.2.2:5000/api', // Android Emulator Localhost
+    baseURL: 'https://school-management-backend-pg5b8ji0b-inovatters.vercel.app/api',
 });
 
 export default API;

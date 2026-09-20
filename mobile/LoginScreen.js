@@ -20,33 +20,45 @@ export default function LoginScreen() {
   const API_URL = "https://school-management-backend-pg5b8ji0b-inovatters.vercel.app";
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    const trimmedInput = email.trim();
+    if (!trimmedInput || !password) {
       Alert.alert('Error', 'Email/Username aur password enter karein.');
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Endpoint path fix (/api/auth/login)
+      console.log('Sending login request to:', `${API_URL}/api/auth/login`);
       const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        // 2. Payload fix (email & password)
-        body: JSON.stringify({ email, password })
+        // Send both username and email to be fully compatible with backend
+        body: JSON.stringify({
+          username: trimmedInput,
+          email: trimmedInput,
+          password: password,
+        }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      console.log('Response Status:', response.status);
+      console.log('Response Data:', data);
 
       if (response.ok) {
-        Alert.alert('Success', `Welcome ${data.user?.name || email}!`);
+        Alert.alert('Success', `Welcome ${data.user?.name || data.user?.username || trimmedInput}!`);
+      } else if (response.status === 401 && (data.protection || data.error?.message === 'Protected deployment')) {
+        Alert.alert(
+          'Vercel Authentication Active',
+          'Vercel Deployment Protection is blocking this API. Please disable Vercel Authentication in your Vercel Dashboard Settings -> Deployment Protection.'
+        );
       } else {
-        Alert.alert('Login Failed', data.message || 'Invalid Credentials');
+        Alert.alert('Login Failed', data.message || data.error || 'Invalid Credentials');
       }
     } catch (error) {
       console.log('Fetch Error Log:', error.message);
-      Alert.alert('Network Error', 'Backend server connect nahi ho raha. Internet check karein.');
+      Alert.alert('Network Error', 'Backend server connect nahi ho raha. Internet aur backend status check karein.');
     } finally {
       setLoading(false);
     }
@@ -103,7 +115,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    justify: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
     padding: 20,

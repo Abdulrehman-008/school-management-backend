@@ -27,7 +27,11 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Host '0.0.0.0' explicitly bind karein
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+// Host '0.0.0.0' explicitly bind karein only when running directly
+if (process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
+}
+
+module.exports = app;
