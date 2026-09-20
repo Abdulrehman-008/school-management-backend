@@ -9,7 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
+import api from './src/services/api';
 import { saveSession } from './src/services/authStorage';
 
 export default function LoginScreen({ navigation }) {
@@ -17,52 +19,33 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const API_URL = 'https://school-management-backend-inovatters.vercel.app';
-
   const handleLogin = async () => {
     const trimmedInput = identifier.trim();
     if (!trimmedInput || !password) {
-      Alert.alert('Error', 'Please enter username and password.');
+      Alert.alert('Validation', 'Please enter username and password.');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: trimmedInput,
-          email: trimmedInput,
-          password,
-        }),
+      const { data } = await api.post('/auth/login', {
+        username: trimmedInput,
+        email: trimmedInput,
+        password,
       });
 
-      const data = await response.json().catch(() => ({}));
+      await saveSession(data.token, data.user);
 
-      if (response.ok) {
-        await saveSession(data.token, data.user);
-
-        if (data.user?.role === 'admin') {
-          navigation.replace('AdminDashboard');
-        } else if (data.user?.role === 'teacher') {
-          navigation.replace('TeacherDashboard');
-        } else {
-          Alert.alert('Login Error', 'Unknown role. Contact administrator.');
-        }
-      } else if (
-        response.status === 401 &&
-        (data.protection || data.error?.message === 'Protected deployment')
-      ) {
-        Alert.alert(
-          'Vercel Protection Active',
-          'Disable Deployment Protection in Vercel Dashboard → Settings → Deployment Protection.'
-        );
+      if (data.user?.role === 'admin') {
+        navigation.replace('AdminDashboard');
+      } else if (data.user?.role === 'teacher') {
+        navigation.replace('TeacherDashboard');
       } else {
-        Alert.alert('Login Failed', data.message || data.error || 'Invalid credentials.');
+        Alert.alert('Login Error', 'Unknown role. Contact administrator.');
       }
     } catch (error) {
-      Alert.alert('Network Error', 'Cannot reach the server. Check your internet connection.');
+      // Show the real error message for easier debugging
+      Alert.alert('Login Failed', error.message || 'Could not connect to server.');
     } finally {
       setLoading(false);
     }
@@ -73,8 +56,13 @@ export default function LoginScreen({ navigation }) {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
+          {/* Logo placeholder */}
+          <View style={styles.logoCircle}>
+            <Text style={styles.logoText}>🏫</Text>
+          </View>
+
           <Text style={styles.title}>School Management</Text>
           <Text style={styles.subtitle}>Sign in to continue</Text>
 
@@ -87,6 +75,7 @@ export default function LoginScreen({ navigation }) {
               onChangeText={setIdentifier}
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="next"
             />
           </View>
 
@@ -98,6 +87,8 @@ export default function LoginScreen({ navigation }) {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
             />
           </View>
 
@@ -105,10 +96,13 @@ export default function LoginScreen({ navigation }) {
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
+            activeOpacity={0.8}
           >
-            <Text style={styles.buttonText}>
-              {loading ? 'Signing in...' : 'SIGN IN'}
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>SIGN IN</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -128,28 +122,37 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 28,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
+    elevation: 8,
+    shadowColor: '#1a237e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    alignItems: 'center',
   },
+  logoCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#e8eaf6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  logoText: { fontSize: 36 },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1a237e',
-    textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
+    color: '#888',
     marginBottom: 28,
   },
-  inputContainer: { marginBottom: 18 },
+  inputContainer: { width: '100%', marginBottom: 18 },
   label: {
     fontSize: 13,
     fontWeight: '600',
@@ -160,24 +163,26 @@ const styles = StyleSheet.create({
     height: 50,
     borderWidth: 1.5,
     borderColor: '#ddd',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 14,
     fontSize: 16,
     backgroundColor: '#fafafa',
+    color: '#222',
   },
   button: {
-    height: 50,
+    width: '100%',
+    height: 52,
     backgroundColor: '#1a237e',
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
   },
-  buttonDisabled: { opacity: 0.6 },
+  buttonDisabled: { opacity: 0.65 },
   buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
 });

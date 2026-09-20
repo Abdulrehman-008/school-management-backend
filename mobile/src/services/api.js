@@ -11,31 +11,39 @@ const api = axios.create({
   },
 });
 
-// Attach Authorization token on every request
+// Attach Authorization token — using a then-chain to avoid async interceptor issues
 api.interceptors.request.use(
-  async (config) => {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    } catch (_) {
-      // No token stored — proceed without auth header
-    }
-    return config;
+  (config) => {
+    return AsyncStorage.getItem('token')
+      .then((token) => {
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+      })
+      .catch(() => config); // If AsyncStorage fails, continue without token
   },
   (error) => Promise.reject(error)
 );
 
-// Normalize error messages
+// Normalize all error responses to a plain Error with a readable message
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
-      'An unexpected error occurred';
+    let message = 'An unexpected error occurred';
+
+    if (error.code === 'ECONNABORTED') {
+      message = 'Request timed out. Please check your internet connection.';
+    } else if (!error.response) {
+      // No response = network-level failure
+      message = `Network error: ${error.message}`;
+    } else {
+      message =
+        error.response.data?.message ||
+        error.response.data?.error ||
+        `Server error (${error.response.status})`;
+    }
+
     return Promise.reject(new Error(message));
   }
 );
