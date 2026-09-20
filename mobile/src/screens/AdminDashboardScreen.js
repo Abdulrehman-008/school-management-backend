@@ -3,8 +3,8 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, ActivityIndicator, SafeAreaView,
 } from 'react-native';
-import { clearSession } from '../../services/authStorage';
-import api from '../../services/api';
+import { clearSession } from '../services/authStorage';
+import api from '../services/api';
 
 const BLUE = '#1a237e';
 const LIGHT = '#e8eaf6';

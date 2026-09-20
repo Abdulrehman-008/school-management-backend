@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput,
   Alert, ActivityIndicator, SafeAreaView, ScrollView,
 } from 'react-native';
-import api from '../../services/api';
+import api from '../services/api';
 
 const DARK_BLUE = '#1565c0';
 const TERMS = ['Term 1', 'Term 2', 'Term 3', 'Final'];

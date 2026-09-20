@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import api from '../../services/api';
+import api from '../services/api';
 
 const PURPLE = '#6a1b9a';
 

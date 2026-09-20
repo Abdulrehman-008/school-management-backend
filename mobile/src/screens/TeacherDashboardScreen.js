@@ -3,8 +3,8 @@ import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   Alert, ActivityIndicator, SafeAreaView,
 } from 'react-native';
-import { clearSession, loadSession } from '../../services/authStorage';
-import api from '../../services/api';
+import { clearSession, loadSession } from '../services/authStorage';
+import api from '../services/api';
 
 const TEAL = '#00695c';
 

@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput,
   Modal, Alert, ActivityIndicator, SafeAreaView, ScrollView,
 } from 'react-native';
-import api from '../../services/api';
+import api from '../services/api';
 
 const BLUE = '#1a237e';
 
