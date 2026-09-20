@@ -1,13 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, SafeAreaView,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { clearSession } from '../services/authStorage';
 import api from '../services/api';
 
 const BLUE = '#1a237e';
-const LIGHT = '#e8eaf6';
 
 export default function AdminDashboardScreen({ navigation }) {
   const [stats, setStats] = useState({ classes: 0, teachers: 0, students: 0 });
@@ -56,30 +61,44 @@ export default function AdminDashboardScreen({ navigation }) {
     {
       title: 'Classes & Subjects',
       icon: '📚',
-      desc: 'Add classes and manage subjects',
+      desc: 'Add/Edit classes and manage subjects',
       screen: 'ManageClasses',
       color: '#3949ab',
     },
     {
       title: 'Teachers',
       icon: '👩‍🏫',
-      desc: 'Register teachers & assign classes',
+      desc: 'Register/Edit teachers & assign classes',
       screen: 'ManageTeachers',
       color: '#1565c0',
     },
     {
       title: 'Students',
       icon: '🎒',
-      desc: 'Enroll students & view rosters',
+      desc: 'Enroll, Edit & view student roster',
       screen: 'ManageStudents',
       color: '#00695c',
     },
     {
-      title: 'Report Cards',
-      icon: '📊',
-      desc: 'View & generate result PDFs',
+      title: 'Student Report Cards',
+      icon: '📄',
+      desc: 'Search student, view card & export PDF',
       screen: 'ReportCard',
       color: '#6a1b9a',
+    },
+    {
+      title: 'Class Results Sheet',
+      icon: '📊',
+      desc: 'Complete class-wise list, avg & export PDF',
+      screen: 'ClassResult',
+      color: '#0277bd',
+    },
+    {
+      title: 'Change Admin Password',
+      icon: '🔒',
+      desc: 'Update your account login password',
+      screen: 'ChangePassword',
+      color: '#455a64',
     },
   ];
 
@@ -115,7 +134,7 @@ export default function AdminDashboardScreen({ navigation }) {
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <Text style={styles.sectionTitle}>Administrative Actions</Text>
 
         {/* Nav Cards */}
         {navCards.map((card) => (
@@ -161,7 +180,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 28,
+    marginBottom: 24,
     gap: 10,
   },
   statCard: {
@@ -187,20 +206,20 @@ const styles = StyleSheet.create({
   navCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 18,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
     borderLeftWidth: 5,
-    elevation: 3,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 3,
   },
-  navIcon: { fontSize: 32, marginRight: 16 },
+  navIcon: { fontSize: 30, marginRight: 14 },
   navInfo: { flex: 1 },
-  navTitle: { fontSize: 16, fontWeight: '700', marginBottom: 3 },
-  navDesc: { fontSize: 13, color: '#888' },
-  navArrow: { fontSize: 28, color: '#bbb', fontWeight: '300' },
+  navTitle: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  navDesc: { fontSize: 12, color: '#777' },
+  navArrow: { fontSize: 26, color: '#bbb', fontWeight: '300' },
 });

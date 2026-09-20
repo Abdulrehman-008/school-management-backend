@@ -38,13 +38,14 @@ export default function LoginScreen({ navigation }) {
 
       if (data.user?.role === 'admin') {
         navigation.replace('AdminDashboard');
+      } else if (data.user?.role === 'class_teacher') {
+        navigation.replace('ClassTeacherDashboard');
       } else if (data.user?.role === 'teacher') {
         navigation.replace('TeacherDashboard');
       } else {
         Alert.alert('Login Error', 'Unknown role. Contact administrator.');
       }
     } catch (error) {
-      // Show the real error message for easier debugging
       Alert.alert('Login Failed', error.message || 'Could not connect to server.');
     } finally {
       setLoading(false);
@@ -58,7 +59,6 @@ export default function LoginScreen({ navigation }) {
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
-          {/* Logo placeholder */}
           <View style={styles.logoCircle}>
             <Text style={styles.logoText}>🏫</Text>
           </View>
