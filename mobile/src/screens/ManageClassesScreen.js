@@ -9,14 +9,17 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../services/api';
 
 const BLUE = '#1a237e';
 
 export default function ManageClassesScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const isClassTeacher = route.params?.isClassTeacher || false;
   const targetClassId = route.params?.targetClassId || null;
 
@@ -218,6 +221,8 @@ export default function ManageClassesScreen({ navigation, route }) {
     );
   };
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20) + 8;
+
   const renderClass = ({ item }) => (
     <View style={styles.classCard}>
       <View style={styles.classHeader}>
@@ -280,18 +285,29 @@ export default function ManageClassesScreen({ navigation, route }) {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+    <View style={styles.container}>
+      {/* Dynamic Header with Status Bar padding */}
+      <View style={[styles.header, { paddingTop: topPadding }]}>
+        <TouchableOpacity
+          style={styles.headerActionBtn}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Text style={styles.backBtn}>‹ Back</Text>
         </TouchableOpacity>
+
         <Text style={styles.headerTitle}>Classes & Subjects</Text>
+
         {!isClassTeacher ? (
-          <TouchableOpacity style={styles.addBtn} onPress={openAddClassModal}>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={openAddClassModal}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
             <Text style={styles.addBtnText}>+ Class</Text>
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 40 }} />
+          <View style={{ width: 60 }} />
         )}
       </View>
 
@@ -406,29 +422,38 @@ export default function ManageClassesScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f4ff' },
+  container: { flex: 1, backgroundColor: '#f0f4ff' },
   header: {
     backgroundColor: BLUE,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  backBtn: { color: '#c5cae9', fontSize: 22 },
+  headerActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  backBtn: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   addBtn: {
     backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 8,
   },
-  addBtnText: { color: BLUE, fontWeight: '700', fontSize: 13 },
+  addBtnText: { color: BLUE, fontWeight: 'bold', fontSize: 13 },
   list: { padding: 16 },
   classCard: {
     backgroundColor: '#fff',

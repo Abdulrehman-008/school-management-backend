@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,11 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
 import api from '../services/api';
 import { enqueue, getQueue } from '../services/offlineQueue';
@@ -19,10 +21,14 @@ const DARK_BLUE = '#1565c0';
 const TERMS = ['Term 1', 'Term 2', 'Term 3', 'Final'];
 
 export default function EnterMarksScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { class_id, subject_id, class_name, subject_name } = route.params;
 
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Form state
   const [selStudent, setSelStudent] = useState(null);
@@ -69,9 +75,20 @@ export default function EnterMarksScreen({ navigation, route }) {
     fetchStudents();
   }, [fetchStudents]);
 
+  // Filter students in real-time by Roll No or Name
+  const filteredStudents = useMemo(() => {
+    if (!searchQuery.trim()) return students;
+    const q = searchQuery.toLowerCase().trim();
+    return students.filter((s) => {
+      const matchRoll = String(s.roll_no || '').toLowerCase().includes(q);
+      const matchName = String(s.name || '').toLowerCase().includes(q);
+      return matchRoll || matchName;
+    });
+  }, [students, searchQuery]);
+
   const handleSubmit = async () => {
     if (!selStudent) {
-      Alert.alert('Validation', 'Please select a student.');
+      Alert.alert('Validation', 'Please select a student from the list.');
       return;
     }
 
@@ -101,29 +118,30 @@ export default function EnterMarksScreen({ navigation, route }) {
     try {
       if (isOnline) {
         await api.post('/results/add', payload);
-        Alert.alert('Success', `Marks saved online for Roll #${selStudent.roll_no} - ${selStudent.name}!`, [
+        Alert.alert('Success', `Marks saved for Roll #${selStudent.roll_no} - ${selStudent.name}!`, [
           {
             text: 'Enter Next',
             onPress: () => {
               setSelStudent(null);
               setMarksObtained('');
+              setSearchQuery('');
             },
           },
           { text: 'Done', onPress: () => navigation.goBack() },
         ]);
       } else {
-        // Offline: save to queue
         await enqueue(payload);
         await updatePendingCount();
         Alert.alert(
           'Saved Offline',
-          `No internet. Marks saved to local queue for Roll #${selStudent.roll_no} - ${selStudent.name}. Will sync automatically when back online.`,
+          `No internet. Marks saved to device queue for Roll #${selStudent.roll_no} - ${selStudent.name}. Will sync automatically when back online.`,
           [
             {
               text: 'Enter Next',
               onPress: () => {
                 setSelStudent(null);
                 setMarksObtained('');
+                setSearchQuery('');
               },
             },
             { text: 'Done', onPress: () => navigation.goBack() },
@@ -131,22 +149,28 @@ export default function EnterMarksScreen({ navigation, route }) {
         );
       }
     } catch (err) {
-      // Network failed during call, queue it
       await enqueue(payload);
       await updatePendingCount();
       Alert.alert(
         'Offline Queued',
-        'Server unreachable. Marks have been safely saved on device and will sync later.'
+        'Server unreachable. Marks safely stored on device and will sync automatically.'
       );
     } finally {
       setSaving(false);
     }
   };
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20) + 8;
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+    <View style={styles.container}>
+      {/* Header with notch padding */}
+      <View style={[styles.header, { paddingTop: topPadding }]}>
+        <TouchableOpacity
+          style={styles.headerActionBtn}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Text style={styles.backBtn}>‹ Back</Text>
         </TouchableOpacity>
         <View style={{ alignItems: 'center' }}>
@@ -177,16 +201,36 @@ export default function EnterMarksScreen({ navigation, route }) {
       )}
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Step 1: Select Student with Roll No & Name */}
-        <Text style={styles.sectionLabel}>1. Select Student (Roll No & Name)</Text>
+        {/* Step 1: Select Student with Real-time Search */}
+        <Text style={styles.sectionLabel}>1. Select Student (Search by Roll No / Name)</Text>
+
+        {/* Live Search Input */}
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Type Roll No or Student Name..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.clearSearch}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {loading ? (
           <ActivityIndicator color={DARK_BLUE} />
         ) : (
           <ScrollView style={styles.studentList} nestedScrollEnabled>
-            {students.length === 0 ? (
-              <Text style={styles.noStudentsText}>No students found in this class.</Text>
+            {filteredStudents.length === 0 ? (
+              <Text style={styles.noStudentsText}>
+                {searchQuery ? `No student matches "${searchQuery}"` : 'No students found in this class.'}
+              </Text>
             ) : (
-              students.map((s) => {
+              filteredStudents.map((s) => {
                 const isSelected = selStudent?.id === s.id;
                 return (
                   <TouchableOpacity
@@ -283,21 +327,30 @@ export default function EnterMarksScreen({ navigation, route }) {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f4ff' },
+  container: { flex: 1, backgroundColor: '#f0f4ff' },
   header: {
     backgroundColor: DARK_BLUE,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  backBtn: { color: '#90caf9', fontSize: 22 },
+  headerActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  backBtn: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
   headerTitle: { color: '#fff', fontSize: 17, fontWeight: 'bold', textAlign: 'center' },
   headerSub: { color: '#90caf9', fontSize: 11, textAlign: 'center', marginTop: 1 },
   networkBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -317,6 +370,20 @@ const styles = StyleSheet.create({
   syncBtnText: { fontSize: 12, color: '#1565c0', fontWeight: 'bold', textDecorationLine: 'underline' },
   content: { padding: 18, paddingBottom: 30 },
   sectionLabel: { fontSize: 14, fontWeight: '700', color: '#333', marginBottom: 10 },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#d1d5db',
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    height: 44,
+  },
+  searchIcon: { fontSize: 15, marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 14, color: '#222' },
+  clearSearch: { color: '#888', fontSize: 16, paddingHorizontal: 6 },
   studentList: { maxHeight: 200, backgroundColor: '#fff', borderRadius: 12, elevation: 2 },
   studentRow: {
     flexDirection: 'row',

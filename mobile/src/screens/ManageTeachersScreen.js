@@ -9,14 +9,17 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../services/api';
 
 const INDIGO = '#3949ab';
 
 export default function ManageTeachersScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [teachers, setTeachers] = useState([]);
   const [allocations, setAllocations] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -30,15 +33,17 @@ export default function ManageTeachersScreen({ navigation }) {
   const [tUsername, setTUsername] = useState('');
   const [tPhone, setTPhone] = useState('');
   const [tPassword, setTPassword] = useState('');
-  const [tRole, setTRole] = useState('teacher'); // 'teacher' or 'class_teacher'
+  const [tRole, setTRole] = useState('teacher');
   const [savingTeacher, setSavingTeacher] = useState(false);
 
-  // Allocate modal (Multi-subject selection)
+  // Multi-Class Multi-Subject Allocate Modal
   const [allocModal, setAllocModal] = useState(false);
   const [selTeacher, setSelTeacher] = useState(null);
-  const [selClass, setSelClass] = useState(null);
+  const [activeClass, setActiveClass] = useState(null);
   const [classSubjects, setClassSubjects] = useState([]);
   const [selectedSubjectIds, setSelectedSubjectIds] = useState([]);
+  // Staging list: array of { class_id, class_name, subjects: [{ id, name }] }
+  const [stagedAllocations, setStagedAllocations] = useState([]);
   const [savingAlloc, setSavingAlloc] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -153,14 +158,15 @@ export default function ManageTeachersScreen({ navigation }) {
 
   const openAllocateModal = (teacher) => {
     setSelTeacher(teacher);
-    setSelClass(null);
+    setActiveClass(null);
     setClassSubjects([]);
     setSelectedSubjectIds([]);
+    setStagedAllocations([]);
     setAllocModal(true);
   };
 
-  const onClassSelect = async (cls) => {
-    setSelClass(cls);
+  const onSelectClass = async (cls) => {
+    setActiveClass(cls);
     setSelectedSubjectIds([]);
     try {
       const res = await api.get(`/school/subjects/${cls.id}`);
@@ -178,21 +184,94 @@ export default function ManageTeachersScreen({ navigation }) {
     }
   };
 
-  const handleAllocate = async () => {
-    if (!selTeacher || !selClass || selectedSubjectIds.length === 0) {
-      Alert.alert('Validation', 'Please select class and at least one subject.');
+  const handleStageCurrentClassSubjects = () => {
+    if (!activeClass || selectedSubjectIds.length === 0) {
+      Alert.alert('Notice', 'Please select a class and at least one subject to add.');
+      return;
+    }
+
+    const chosenSubjects = classSubjects
+      .filter((s) => selectedSubjectIds.includes(s.id))
+      .map((s) => ({ id: s.id, name: s.subject_name }));
+
+    // Check if class already staged, merge subjects
+    const existingIndex = stagedAllocations.findIndex((item) => item.class_id === activeClass.id);
+    let updatedStaged = [...stagedAllocations];
+
+    if (existingIndex >= 0) {
+      const mergedMap = new Map();
+      updatedStaged[existingIndex].subjects.forEach((s) => mergedMap.set(s.id, s));
+      chosenSubjects.forEach((s) => mergedMap.set(s.id, s));
+      updatedStaged[existingIndex].subjects = Array.from(mergedMap.values());
+    } else {
+      updatedStaged.push({
+        class_id: activeClass.id,
+        class_name: activeClass.class_name,
+        subjects: chosenSubjects,
+      });
+    }
+
+    setStagedAllocations(updatedStaged);
+    setSelectedSubjectIds([]);
+    Alert.alert('Added', `${chosenSubjects.length} subject(s) added from ${activeClass.class_name}. You can select another class or click Save.`);
+  };
+
+  const removeStagedSubject = (classId, subjId) => {
+    const updated = stagedAllocations
+      .map((item) => {
+        if (item.class_id === classId) {
+          return {
+            ...item,
+            subjects: item.subjects.filter((s) => s.id !== subjId),
+          };
+        }
+        return item;
+      })
+      .filter((item) => item.subjects.length > 0);
+    setStagedAllocations(updated);
+  };
+
+  const handleSaveAllAllocations = async () => {
+    // If user has selections in current class but forgot to click Add, include them
+    let finalStaged = [...stagedAllocations];
+    if (activeClass && selectedSubjectIds.length > 0) {
+      const chosen = classSubjects
+        .filter((s) => selectedSubjectIds.includes(s.id))
+        .map((s) => ({ id: s.id, name: s.subject_name }));
+
+      const existingIndex = finalStaged.findIndex((i) => i.class_id === activeClass.id);
+      if (existingIndex >= 0) {
+        const merged = new Map();
+        finalStaged[existingIndex].subjects.forEach((s) => merged.set(s.id, s));
+        chosen.forEach((s) => merged.set(s.id, s));
+        finalStaged[existingIndex].subjects = Array.from(merged.values());
+      } else {
+        finalStaged.push({
+          class_id: activeClass.id,
+          class_name: activeClass.class_name,
+          subjects: chosen,
+        });
+      }
+    }
+
+    if (finalStaged.length === 0) {
+      Alert.alert('Notice', 'Please select at least one class and subject.');
       return;
     }
 
     setSavingAlloc(true);
     try {
+      const batchPayload = finalStaged.map((item) => ({
+        class_id: item.class_id,
+        subject_ids: item.subjects.map((s) => s.id),
+      }));
+
       await api.post('/allocation/allocate', {
         teacher_id: selTeacher.id,
-        class_id: selClass.id,
-        subject_ids: selectedSubjectIds,
+        allocations: batchPayload,
       });
 
-      Alert.alert('Success', 'Subjects allocated to teacher successfully!');
+      Alert.alert('Success', 'All selected classes and subjects assigned successfully!');
       setAllocModal(false);
       fetchData();
     } catch (err) {
@@ -219,6 +298,8 @@ export default function ManageTeachersScreen({ navigation }) {
       },
     ]);
   };
+
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20) + 8;
 
   const renderTeacher = ({ item }) => {
     const allocs = getTeacherAllocations(item.id);
@@ -248,9 +329,9 @@ export default function ManageTeachersScreen({ navigation }) {
         </View>
 
         <View style={styles.assignRow}>
-          <Text style={styles.assignTitle}>Assigned Subjects:</Text>
+          <Text style={styles.assignTitle}>Assigned Classes & Subjects:</Text>
           <TouchableOpacity style={styles.allocBtn} onPress={() => openAllocateModal(item)}>
-            <Text style={styles.allocBtnText}>+ Assign Multiple</Text>
+            <Text style={styles.allocBtnText}>+ Assign Classes</Text>
           </TouchableOpacity>
         </View>
 
@@ -279,13 +360,21 @@ export default function ManageTeachersScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: topPadding }]}>
+        <TouchableOpacity
+          style={styles.headerActionBtn}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Text style={styles.backBtn}>‹ Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Manage Teachers</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openRegisterModal}>
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={openRegisterModal}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Text style={styles.addBtnText}>+ Teacher</Text>
         </TouchableOpacity>
       </View>
@@ -393,25 +482,26 @@ export default function ManageTeachersScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Multi-Subject Allocate Modal */}
+      {/* Multi-Class Multi-Subject Staged Allocate Modal */}
       <Modal visible={allocModal} transparent animationType="slide">
         <View style={styles.overlay}>
           <ScrollView>
             <View style={styles.modal}>
               <Text style={styles.modalTitle}>
-                Assign Subjects to {selTeacher?.name}
+                Assign Classes to {selTeacher?.name}
               </Text>
 
-              <Text style={styles.fieldLabel}>1. Select Class</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+              {/* Step 1: Class Picker */}
+              <Text style={styles.fieldLabel}>1. Choose Class</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {classes.map((c) => (
                     <TouchableOpacity
                       key={c.id}
-                      style={[styles.chip, selClass?.id === c.id && styles.chipSelected]}
-                      onPress={() => onClassSelect(c)}
+                      style={[styles.chip, activeClass?.id === c.id && styles.chipSelected]}
+                      onPress={() => onSelectClass(c)}
                     >
-                      <Text style={[styles.chipText, selClass?.id === c.id && styles.chipTextSelected]}>
+                      <Text style={[styles.chipText, activeClass?.id === c.id && styles.chipTextSelected]}>
                         {c.class_name}
                       </Text>
                     </TouchableOpacity>
@@ -419,14 +509,15 @@ export default function ManageTeachersScreen({ navigation }) {
                 </View>
               </ScrollView>
 
-              {selClass && (
+              {/* Step 2: Subject checkboxes for selected class */}
+              {activeClass && (
                 <>
                   <Text style={styles.fieldLabel}>
-                    2. Select Subjects (Multiple Allowed)
+                    2. Select Subjects in {activeClass.class_name}
                   </Text>
                   {classSubjects.length === 0 ? (
-                    <Text style={{ color: '#888', fontStyle: 'italic', marginBottom: 14 }}>
-                      No subjects added in this class yet.
+                    <Text style={{ color: '#888', fontStyle: 'italic', marginBottom: 12 }}>
+                      No subjects added in {activeClass.class_name} yet.
                     </Text>
                   ) : (
                     <View style={styles.multiSubjectBox}>
@@ -447,9 +538,45 @@ export default function ManageTeachersScreen({ navigation }) {
                           </TouchableOpacity>
                         );
                       })}
+                      <TouchableOpacity
+                        style={styles.addStageBtn}
+                        onPress={handleStageCurrentClassSubjects}
+                      >
+                        <Text style={styles.addStageBtnText}>
+                          + Add {activeClass.class_name} Selections ({selectedSubjectIds.length})
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </>
+              )}
+
+              {/* Step 3: Staged summary across multiple classes */}
+              <Text style={[styles.fieldLabel, { marginTop: 10 }]}>
+                3. Total Classes & Subjects to Assign:
+              </Text>
+              {stagedAllocations.length === 0 ? (
+                <Text style={{ color: '#888', fontStyle: 'italic', marginBottom: 14 }}>
+                  No classes staged yet. Pick a class above and add subjects.
+                </Text>
+              ) : (
+                <View style={styles.stagedContainer}>
+                  {stagedAllocations.map((item) => (
+                    <View key={item.class_id} style={styles.stagedClassBlock}>
+                      <Text style={styles.stagedClassTitle}>{item.class_name}:</Text>
+                      <View style={styles.stagedChipRow}>
+                        {item.subjects.map((sub) => (
+                          <View key={sub.id} style={styles.stagedSubjectChip}>
+                            <Text style={styles.stagedSubjectText}>{sub.name}</Text>
+                            <TouchableOpacity onPress={() => removeStagedSubject(item.class_id, sub.id)}>
+                              <Text style={styles.stagedCross}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                </View>
               )}
 
               <View style={styles.modalActions}>
@@ -458,11 +585,11 @@ export default function ManageTeachersScreen({ navigation }) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.saveBtn}
-                  onPress={handleAllocate}
+                  onPress={handleSaveAllAllocations}
                   disabled={savingAlloc}
                 >
                   <Text style={styles.saveBtnText}>
-                    {savingAlloc ? 'Saving...' : `Allocate (${selectedSubjectIds.length})`}
+                    {savingAlloc ? 'Saving...' : 'Save All Allocations'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -470,29 +597,38 @@ export default function ManageTeachersScreen({ navigation }) {
           </ScrollView>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f4ff' },
+  container: { flex: 1, backgroundColor: '#f0f4ff' },
   header: {
     backgroundColor: INDIGO,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  backBtn: { color: '#c5cae9', fontSize: 22 },
+  headerActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  backBtn: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   addBtn: {
     backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 8,
   },
-  addBtnText: { color: INDIGO, fontWeight: '700', fontSize: 13 },
+  addBtnText: { color: INDIGO, fontWeight: 'bold', fontSize: 13 },
   list: { padding: 16 },
   card: {
     backgroundColor: '#fff',
@@ -635,6 +771,34 @@ const styles = StyleSheet.create({
   checkmark: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   checkLabel: { fontSize: 14, color: '#333' },
   checkLabelActive: { fontWeight: '600', color: INDIGO },
+  addStageBtn: {
+    backgroundColor: '#e8eaf6',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  addStageBtnText: { color: INDIGO, fontWeight: '700', fontSize: 13 },
+  stagedContainer: {
+    backgroundColor: '#f9f9fc',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 14,
+  },
+  stagedClassBlock: { marginBottom: 8 },
+  stagedClassTitle: { fontSize: 13, fontWeight: 'bold', color: '#333', marginBottom: 4 },
+  stagedChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  stagedSubjectChip: {
+    backgroundColor: '#e0e7ff',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  stagedSubjectText: { color: '#1e3a8a', fontSize: 12 },
+  stagedCross: { color: '#991b1b', fontSize: 12, fontWeight: 'bold' },
   modalActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
   cancelBtn: {
     flex: 1,

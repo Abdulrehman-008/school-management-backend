@@ -6,16 +6,19 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
   ScrollView,
   ActivityIndicator,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../services/api';
 import { loadSession } from '../services/authStorage';
 
 const BLUE = '#1a237e';
 
 export default function ChangePasswordScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -61,14 +64,20 @@ export default function ChangePasswordScreen({ navigation }) {
     }
   };
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20) + 8;
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: topPadding }]}>
+        <TouchableOpacity
+          style={styles.headerActionBtn}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Text style={styles.backBtn}>‹ Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Change Password</Text>
-        <View style={{ width: 50 }} />
+        <View style={{ width: 45 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -113,21 +122,30 @@ export default function ChangePasswordScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f4ff' },
+  container: { flex: 1, backgroundColor: '#f0f4ff' },
   header: {
     backgroundColor: BLUE,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  backBtn: { color: '#c5cae9', fontSize: 22 },
+  headerActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  backBtn: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   content: { padding: 20 },
   card: {

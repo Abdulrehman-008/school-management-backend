@@ -7,9 +7,10 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
@@ -100,6 +101,7 @@ function buildClassReportHTML(className, teacherName, studentResults, averagePct
 }
 
 export default function ClassResultScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [results, setResults] = useState([]);
@@ -156,7 +158,6 @@ export default function ClassResultScreen({ navigation }) {
       const html = buildClassReportHTML(selectedClass.class_name, teacherName, results, averagePct);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
 
-      // Fix Android file sharing permission by copying to cache or document directory
       let targetUri = uri;
       if (Platform.OS === 'android') {
         const safeName = `Class_Result_${selectedClass.class_name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`;
@@ -181,10 +182,17 @@ export default function ClassResultScreen({ navigation }) {
     }
   };
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20) + 8;
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+    <View style={styles.container}>
+      {/* Header with notch padding */}
+      <View style={[styles.header, { paddingTop: topPadding }]}>
+        <TouchableOpacity
+          style={styles.headerActionBtn}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Text style={styles.backBtn}>‹ Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Class Results</Text>
@@ -192,6 +200,7 @@ export default function ClassResultScreen({ navigation }) {
           style={[styles.pdfHeaderBtn, generatingPdf && { opacity: 0.6 }]}
           onPress={handleGeneratePdf}
           disabled={generatingPdf}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Text style={styles.pdfHeaderBtnText}>{generatingPdf ? 'PDF...' : '📄 PDF'}</Text>
         </TouchableOpacity>
@@ -238,11 +247,11 @@ export default function ClassResultScreen({ navigation }) {
           ) : (
             <View style={styles.tableCard}>
               <View style={styles.tableHeaderRow}>
-                <Text style={[styles.th, { width: 50 }]}>Roll</Text>
+                <Text style={[styles.th, { width: 45 }]}>Roll</Text>
                 <Text style={[styles.th, { flex: 2 }]}>Student Name</Text>
                 <Text style={[styles.th, { flex: 1.5 }]}>Father Name</Text>
-                <Text style={[styles.th, { width: 75, textAlign: 'right' }]}>Marks</Text>
-                <Text style={[styles.th, { width: 60, textAlign: 'right' }]}>%</Text>
+                <Text style={[styles.th, { width: 70, textAlign: 'right' }]}>Marks</Text>
+                <Text style={[styles.th, { width: 55, textAlign: 'right' }]}>%</Text>
               </View>
 
               {results.map((item, index) => (
@@ -250,21 +259,21 @@ export default function ClassResultScreen({ navigation }) {
                   key={item.student_id || index}
                   style={[styles.tableRow, index % 2 === 1 && { backgroundColor: '#fbfbff' }]}
                 >
-                  <Text style={[styles.td, { width: 50, fontWeight: '700' }]}>{item.roll_no}</Text>
+                  <Text style={[styles.td, { width: 45, fontWeight: '700' }]}>{item.roll_no}</Text>
                   <Text style={[styles.td, { flex: 2, fontWeight: '600', color: '#1a237e' }]}>
                     {item.student_name}
                   </Text>
                   <Text style={[styles.td, { flex: 1.5, color: '#666' }]}>
                     {item.father_name || 'N/A'}
                   </Text>
-                  <Text style={[styles.td, { width: 75, textAlign: 'right' }]}>
+                  <Text style={[styles.td, { width: 70, textAlign: 'right' }]}>
                     {item.total_obtained}/{item.total_max}
                   </Text>
                   <Text
                     style={[
                       styles.td,
                       {
-                        width: 60,
+                        width: 55,
                         textAlign: 'right',
                         fontWeight: '700',
                         color: Number(item.percentage) >= 50 ? '#2e7d32' : '#c62828',
@@ -284,21 +293,30 @@ export default function ClassResultScreen({ navigation }) {
           )}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f4ff' },
+  container: { flex: 1, backgroundColor: '#f0f4ff' },
   header: {
     backgroundColor: INDIGO,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  backBtn: { color: '#c5cae9', fontSize: 22 },
+  headerActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  backBtn: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   pdfHeaderBtn: {
     backgroundColor: '#fff',

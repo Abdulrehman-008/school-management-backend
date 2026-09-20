@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,17 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../services/api';
 
 const GREEN = '#00695c';
 
 export default function ManageStudentsScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const presetClassId = route.params?.class_id || null;
   const presetClassName = route.params?.class_name || null;
   const readOnly = route.params?.readOnly || false;
@@ -26,6 +29,9 @@ export default function ManageStudentsScreen({ navigation, route }) {
   const [students, setStudents] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Search input
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Modal State (Enroll / Edit)
   const [modal, setModal] = useState(false);
@@ -163,13 +169,12 @@ export default function ManageStudentsScreen({ navigation, route }) {
   };
 
   const handleDeleteStudent = (student) => {
-    // Only admin can delete student
     if (isClassTeacher) {
-      Alert.alert('Permission Denied', 'Class Teachers are only permitted to Add & Edit students. Only Admin can delete.');
+      Alert.alert('Permission Denied', 'Only Admin can delete students.');
       return;
     }
 
-    Alert.alert('Delete Student', `Are you sure you want to delete ${student.name}? This will also delete their results.`, [
+    Alert.alert('Delete Student', `Are you sure you want to delete ${student.name}? This will also remove their results.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -186,6 +191,19 @@ export default function ManageStudentsScreen({ navigation, route }) {
       },
     ]);
   };
+
+  const filteredStudents = useMemo(() => {
+    if (!searchQuery.trim()) return students;
+    const q = searchQuery.toLowerCase().trim();
+    return students.filter(
+      (s) =>
+        String(s.roll_no || '').toLowerCase().includes(q) ||
+        String(s.name || '').toLowerCase().includes(q) ||
+        String(s.father_name || '').toLowerCase().includes(q)
+    );
+  }, [students, searchQuery]);
+
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20) + 8;
 
   const renderStudent = ({ item }) => (
     <View style={styles.studentRow}>
@@ -216,19 +234,33 @@ export default function ManageStudentsScreen({ navigation, route }) {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+    <View style={styles.container}>
+      {/* Dynamic Header with Status Bar padding */}
+      <View style={[styles.header, { paddingTop: topPadding }]}>
+        <TouchableOpacity
+          style={styles.headerActionBtn}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Text style={styles.backBtn}>‹ Back</Text>
         </TouchableOpacity>
+
         <Text style={styles.headerTitle}>{presetClassName || 'Students'}</Text>
-        {!readOnly && (
-          <TouchableOpacity style={styles.addBtn} onPress={openAddModal}>
+
+        {!readOnly ? (
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={openAddModal}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
             <Text style={styles.addBtnText}>+ Student</Text>
           </TouchableOpacity>
+        ) : (
+          <View style={{ width: 60 }} />
         )}
       </View>
 
+      {/* Class filter (only when not in preset mode) */}
       {!presetClassId && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
           <View style={styles.filterRow}>
@@ -255,18 +287,40 @@ export default function ManageStudentsScreen({ navigation, route }) {
         </ScrollView>
       )}
 
+      {/* Live search input for students */}
+      <View style={styles.searchWrap}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by Roll No, Name or Father Name..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.searchClear}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       {loading ? (
         <ActivityIndicator color={GREEN} size="large" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
-          data={students}
+          data={filteredStudents}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderStudent}
           contentContainerStyle={styles.list}
-          ListHeaderComponent={<Text style={styles.countText}>{students.length} student(s)</Text>}
+          ListHeaderComponent={
+            <Text style={styles.countText}>
+              Showing {filteredStudents.length} of {students.length} student(s)
+            </Text>
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>No students found.</Text>
+              <Text style={styles.emptyText}>
+                {searchQuery ? `No students found matching "${searchQuery}"` : 'No students found.'}
+              </Text>
             </View>
           }
         />
@@ -361,30 +415,39 @@ export default function ManageStudentsScreen({ navigation, route }) {
           </ScrollView>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0fff4' },
+  container: { flex: 1, backgroundColor: '#f0fff4' },
   header: {
     backgroundColor: GREEN,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  backBtn: { color: '#b2dfdb', fontSize: 22 },
+  headerActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  backBtn: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', flex: 1, textAlign: 'center' },
   addBtn: {
     backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 8,
   },
-  addBtnText: { color: GREEN, fontWeight: '700', fontSize: 13 },
-  filterScroll: { maxHeight: 54, paddingVertical: 10 },
+  addBtnText: { color: GREEN, fontWeight: 'bold', fontSize: 13 },
+  filterScroll: { maxHeight: 54, paddingVertical: 8 },
   filterRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8 },
   filterChip: {
     borderWidth: 1.5,
@@ -397,8 +460,24 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: GREEN, borderColor: GREEN },
   filterChipText: { color: '#555', fontSize: 13 },
   filterChipTextActive: { color: '#fff', fontWeight: '600' },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#d1d5db',
+    height: 44,
+  },
+  searchIcon: { fontSize: 14, marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 13, color: '#222' },
+  searchClear: { color: '#888', fontSize: 16, paddingHorizontal: 6 },
   list: { padding: 16 },
-  countText: { fontSize: 13, color: '#888', marginBottom: 10 },
+  countText: { fontSize: 12, color: '#888', marginBottom: 10 },
   studentRow: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -441,8 +520,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   delBtnText: { color: '#c62828', fontWeight: 'bold', fontSize: 13 },
-  empty: { alignItems: 'center', marginTop: 60 },
-  emptyText: { color: '#666', fontSize: 15 },
+  empty: { alignItems: 'center', marginTop: 50 },
+  emptyText: { color: '#666', fontSize: 14 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

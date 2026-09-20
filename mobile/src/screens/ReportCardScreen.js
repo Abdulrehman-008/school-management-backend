@@ -7,10 +7,11 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
   Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
@@ -139,6 +140,7 @@ function buildReportHTML(student, results) {
 }
 
 export default function ReportCardScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [classStudents, setClassStudents] = useState([]);
@@ -150,7 +152,6 @@ export default function ReportCardScreen({ navigation }) {
   const [loadingResults, setLoadingResults] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
 
-  // Load all classes on mount
   useEffect(() => {
     (async () => {
       setLoadingClasses(true);
@@ -165,7 +166,6 @@ export default function ReportCardScreen({ navigation }) {
     })();
   }, []);
 
-  // When class is selected, load its students
   const handleSelectClass = async (cls) => {
     setSelectedClass(cls);
     setSelectedStudent(null);
@@ -181,7 +181,6 @@ export default function ReportCardScreen({ navigation }) {
     }
   };
 
-  // When student is selected, load results
   const handleSelectStudent = async (student) => {
     setSelectedStudent(student);
     setLoadingResults(true);
@@ -206,7 +205,6 @@ export default function ReportCardScreen({ navigation }) {
       const html = buildReportHTML(selectedStudent, results);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
 
-      // Fix Android file sharing permission by copying to cache directory
       let targetUri = uri;
       if (Platform.OS === 'android') {
         const safeName = `Report_Card_${selectedStudent.roll_no}_${selectedStudent.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
@@ -236,10 +234,17 @@ export default function ReportCardScreen({ navigation }) {
   const overallPct = totalMax > 0 ? ((totalObtained / totalMax) * 100).toFixed(1) : null;
   const gradeInfo = overallPct ? getGrade(parseFloat(overallPct)) : null;
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20) + 8;
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+    <View style={styles.container}>
+      {/* Dynamic Header with Status Bar padding */}
+      <View style={[styles.header, { paddingTop: topPadding }]}>
+        <TouchableOpacity
+          style={styles.headerActionBtn}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Text style={styles.backBtn}>‹ Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Report Cards</Text>
@@ -267,7 +272,7 @@ export default function ReportCardScreen({ navigation }) {
           </ScrollView>
         )}
 
-        {/* Step 2: Select Student from that Class */}
+        {/* Step 2: Select Student */}
         {selectedClass && (
           <>
             <Text style={[styles.sectionLabel, { marginTop: 16 }]}>
@@ -392,21 +397,30 @@ export default function ReportCardScreen({ navigation }) {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fdf5ff' },
+  container: { flex: 1, backgroundColor: '#fdf5ff' },
   header: {
     backgroundColor: PURPLE,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  backBtn: { color: '#e1bee7', fontSize: 22 },
+  headerActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  backBtn: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   content: { padding: 18, paddingBottom: 30 },
   sectionLabel: { fontSize: 14, fontWeight: '700', color: '#333', marginBottom: 8 },

@@ -7,14 +7,17 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { clearSession } from '../services/authStorage';
 import api from '../services/api';
 
 const BLUE = '#1a237e';
 
 export default function AdminDashboardScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [stats, setStats] = useState({ classes: 0, teachers: 0, students: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -102,10 +105,12 @@ export default function AdminDashboardScreen({ navigation }) {
     },
   ];
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20) + 8;
+
   return (
-    <SafeAreaView style={styles.safe}>
-      {/* Header */}
-      <View style={styles.header}>
+    <View style={styles.container}>
+      {/* Header with notch padding */}
+      <View style={[styles.header, { paddingTop: topPadding }]}>
         <View>
           <Text style={styles.headerTitle}>Admin Dashboard</Text>
           <Text style={styles.headerSub}>School Management System</Text>
@@ -153,19 +158,23 @@ export default function AdminDashboardScreen({ navigation }) {
           </TouchableOpacity>
         ))}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f4ff' },
+  container: { flex: 1, backgroundColor: '#f0f4ff' },
   header: {
     backgroundColor: BLUE,
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingBottom: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   headerSub: { color: '#c5cae9', fontSize: 12, marginTop: 2 },
