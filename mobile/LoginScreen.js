@@ -17,7 +17,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   // Vercel Production Base Endpoint
-  const API_URL = "https://school-management-backend-pg5b8ji0b-inovatters.vercel.app";
+  const API_URL = "https://school-management-backend-inovatters.vercel.app";
 
   const handleLogin = async () => {
     const trimmedInput = email.trim();
