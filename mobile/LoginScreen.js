@@ -10,9 +10,13 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Image,
+  StatusBar,
 } from 'react-native';
 import api from './src/services/api';
 import { saveSession } from './src/services/authStorage';
+
+const DARK_GREEN = '#1a4a1a';
 
 export default function LoginScreen({ navigation }) {
   const [identifier, setIdentifier] = useState('');
@@ -57,20 +61,50 @@ export default function LoginScreen({ navigation }) {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} />
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* School Photo Banner */}
+        <View style={styles.photoBanner}>
+          <Image
+            source={require('./assets/school_photo.jpg')}
+            style={styles.schoolPhoto}
+            resizeMode="cover"
+          />
+          {/* Dark overlay for text legibility */}
+          <View style={styles.photoOverlay} />
+          <View style={styles.photoTextContainer}>
+            <Text style={styles.photoUrduName}>گورنمنٹ ہائی سکول</Text>
+            <Text style={styles.photoEnglishName}>Govt. High School Pindi Bawray</Text>
+            <Text style={styles.photoLocationText}>ضلع حافظ آباد  •  District Hafizabad</Text>
+          </View>
+        </View>
+
+        {/* Login Card */}
         <View style={styles.card}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>🏫</Text>
+          {/* Circular school logo floating at top */}
+          <View style={styles.logoWrapper}>
+            <Image
+              source={require('./assets/school_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
 
-          <Text style={styles.title}>School Management</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
+          <Text style={styles.title}>School Management System</Text>
+          <Text style={styles.subtitle}>Sign in to your account</Text>
+
+          <View style={styles.divider} />
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Username</Text>
+            <Text style={styles.label}>👤  Username</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter username"
+              placeholderTextColor="#aaa"
               value={identifier}
               onChangeText={setIdentifier}
               autoCapitalize="none"
@@ -80,10 +114,11 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>🔒  Password</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter password"
+              placeholderTextColor="#aaa"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -104,6 +139,10 @@ export default function LoginScreen({ navigation }) {
               <Text style={styles.buttonText}>SIGN IN</Text>
             )}
           </TouchableOpacity>
+
+          <Text style={styles.footerText}>
+            Govt. High School Pindi Bawray, Hafizabad
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -113,70 +152,147 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    justifyContent: 'center',
+    backgroundColor: '#0d2b0d',
     alignItems: 'center',
-    backgroundColor: '#f0f4ff',
-    padding: 20,
   },
-  card: {
+
+  /* ── School Photo Banner ── */
+  photoBanner: {
     width: '100%',
-    maxWidth: 400,
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 28,
-    elevation: 8,
-    shadowColor: '#1a237e',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    alignItems: 'center',
+    height: 230,
+    position: 'relative',
   },
-  logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#e8eaf6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+  schoolPhoto: {
+    width: '100%',
+    height: '100%',
   },
-  logoText: { fontSize: 36 },
-  title: {
-    fontSize: 22,
+  photoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 40, 10, 0.52)',
+  },
+  photoTextContainer: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  photoUrduName: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a237e',
-    marginBottom: 4,
+    color: '#FFD700',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 4,
+  },
+  photoEnglishName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginTop: 3,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  photoLocationText: {
+    fontSize: 12,
+    color: '#d4efdf',
+    textAlign: 'center',
+    marginTop: 3,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+
+  /* ── Login Card ── */
+  card: {
+    width: '92%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    paddingHorizontal: 28,
+    paddingBottom: 28,
+    paddingTop: 10,
+    marginTop: -36,
+    marginBottom: 30,
+    elevation: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    alignItems: 'center',
+  },
+
+  /* ── School Logo ── */
+  logoWrapper: {
+    width: 260,
+    height: 110,
+    borderRadius: 14,
+    marginTop: -30,
+    marginBottom: 14,
+    borderWidth: 3,
+    borderColor: DARK_GREEN,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    backgroundColor: '#fff',
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  title: {
+    fontSize: 19,
+    fontWeight: 'bold',
+    color: DARK_GREEN,
+    marginBottom: 3,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#888',
-    marginBottom: 28,
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  inputContainer: { width: '100%', marginBottom: 18 },
+  divider: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginBottom: 18,
+  },
+
+  inputContainer: { width: '100%', marginBottom: 16 },
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#444',
+    color: '#333',
     marginBottom: 6,
   },
   input: {
     height: 50,
     borderWidth: 1.5,
-    borderColor: '#ddd',
+    borderColor: '#d1d5db',
     borderRadius: 12,
     paddingHorizontal: 14,
-    fontSize: 16,
-    backgroundColor: '#fafafa',
+    fontSize: 15,
+    backgroundColor: '#f9fafb',
     color: '#222',
   },
   button: {
     width: '100%',
     height: 52,
-    backgroundColor: '#1a237e',
+    backgroundColor: DARK_GREEN,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
   },
   buttonDisabled: { opacity: 0.65 },
   buttonText: {
@@ -184,5 +300,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 1.5,
+  },
+  footerText: {
+    fontSize: 11,
+    color: '#aaa',
+    marginTop: 16,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

@@ -31,12 +31,15 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     let message = 'An unexpected error occurred';
+    let isNetworkError = false;
 
     if (error.code === 'ECONNABORTED') {
       message = 'Request timed out. Please check your internet connection.';
+      isNetworkError = true;
     } else if (!error.response) {
       // No response = network-level failure
       message = `Network error: ${error.message}`;
+      isNetworkError = true;
     } else {
       message =
         error.response.data?.message ||
@@ -44,7 +47,11 @@ api.interceptors.response.use(
         `Server error (${error.response.status})`;
     }
 
-    return Promise.reject(new Error(message));
+    const customErr = new Error(message);
+    customErr.isNetworkError = isNetworkError;
+    customErr.response = error.response;
+    customErr.status = error.response?.status;
+    return Promise.reject(customErr);
   }
 );
 

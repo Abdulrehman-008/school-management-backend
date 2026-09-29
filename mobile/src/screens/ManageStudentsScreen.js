@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../services/api';
 
-const GREEN = '#00695c';
+const GREEN = '#1a4a1a';
 
 export default function ManageStudentsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -433,7 +433,7 @@ export default function ManageStudentsScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0fff4' },
+  container: { flex: 1, backgroundColor: '#f0fdf4' },
   header: {
     backgroundColor: GREEN,
     paddingHorizontal: 16,

@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../services/api';
 
-const INDIGO = '#3949ab';
+const INDIGO = '#1a4a1a';
 
 export default function ManageTeachersScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -34,6 +34,14 @@ export default function ManageTeachersScreen({ navigation }) {
   const [tPhone, setTPhone] = useState('');
   const [tPassword, setTPassword] = useState('');
   const [savingTeacher, setSavingTeacher] = useState(false);
+
+  // Change Credentials modal
+  const [credModal, setCredModal] = useState(false);
+  const [credTeacher, setCredTeacher] = useState(null);
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingCred, setSavingCred] = useState(false);
 
   // Multi-Class Multi-Subject Allocate Modal
   const [allocModal, setAllocModal] = useState(false);
@@ -151,6 +159,55 @@ export default function ManageTeachersScreen({ navigation }) {
         },
       ]
     );
+  };
+
+  const openCredModal = (teacher) => {
+    setCredTeacher(teacher);
+    setNewUsername(teacher.username || '');
+    setNewPassword('');
+    setConfirmPassword('');
+    setCredModal(true);
+  };
+
+  const handleSaveCredentials = async () => {
+    if (!newUsername.trim() && !newPassword.trim()) {
+      Alert.alert('Validation', 'Enter a new username or a new password.');
+      return;
+    }
+    if (newPassword.trim() && newPassword !== confirmPassword) {
+      Alert.alert('Validation', 'Passwords do not match.');
+      return;
+    }
+    if (newPassword.trim() && newPassword.trim().length < 4) {
+      Alert.alert('Validation', 'Password must be at least 4 characters.');
+      return;
+    }
+
+    setSavingCred(true);
+    try {
+      const payload = {};
+      if (newUsername.trim() && newUsername.trim() !== credTeacher.username) {
+        payload.new_username = newUsername.trim();
+      }
+      if (newPassword.trim()) {
+        payload.new_password = newPassword.trim();
+      }
+
+      if (Object.keys(payload).length === 0) {
+        Alert.alert('No Changes', 'Username is the same and no new password was entered.');
+        setSavingCred(false);
+        return;
+      }
+
+      await api.put(`/auth/teachers/${credTeacher.id}/credentials`, payload);
+      Alert.alert('Success', `Credentials updated for ${credTeacher.name}!`);
+      setCredModal(false);
+      fetchData();
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || err.message);
+    } finally {
+      setSavingCred(false);
+    }
   };
 
   const openAllocateModal = (teacher) => {
@@ -310,6 +367,9 @@ export default function ManageTeachersScreen({ navigation }) {
             <TouchableOpacity style={styles.editIconBtn} onPress={() => openEditTeacherModal(item)}>
               <Text style={styles.editIconText}>Edit</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.credIconBtn} onPress={() => openCredModal(item)}>
+              <Text style={styles.credIconText}>🔑</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.delIconBtn} onPress={() => handleDeleteTeacher(item)}>
               <Text style={styles.delIconText}>✕</Text>
             </TouchableOpacity>
@@ -450,6 +510,63 @@ export default function ManageTeachersScreen({ navigation }) {
         </View>
       </Modal>
 
+      {/* Change Teacher Credentials Modal */}
+      <Modal visible={credModal} transparent animationType="slide">
+        <View style={styles.overlay}>
+          <ScrollView>
+            <View style={styles.modal}>
+              <Text style={styles.modalTitle}>Change Credentials</Text>
+              <Text style={{ color: '#555', marginBottom: 14, textAlign: 'center' }}>
+                Teacher: <Text style={{ fontWeight: 'bold', color: '#1a4a1a' }}>{credTeacher?.name}</Text>
+              </Text>
+
+              <Text style={styles.fieldLabel}>New Username</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter new username"
+                value={newUsername}
+                onChangeText={setNewUsername}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <Text style={styles.fieldLabel}>New Password</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Leave blank to keep current password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+              />
+
+              <Text style={styles.fieldLabel}>Confirm New Password</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Re-enter new password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setCredModal(false)}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.saveBtn}
+                  onPress={handleSaveCredentials}
+                  disabled={savingCred}
+                >
+                  <Text style={styles.saveBtnText}>
+                    {savingCred ? 'Saving...' : 'Save'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* Multi-Class Multi-Subject Staged Allocate Modal */}
       <Modal visible={allocModal} transparent animationType="slide">
         <View style={styles.overlay}>
@@ -567,7 +684,7 @@ export default function ManageTeachersScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f4ff' },
+  container: { flex: 1, backgroundColor: '#f0fdf4' },
   header: {
     backgroundColor: INDIGO,
     paddingHorizontal: 16,
@@ -618,6 +735,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   editIconText: { fontSize: 12, color: INDIGO, fontWeight: '700' },
+  credIconBtn: {
+    backgroundColor: '#fff8e1',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#f9a825',
+  },
+  credIconText: { fontSize: 13 },
   delIconBtn: {
     backgroundColor: '#ffebee',
     width: 26,

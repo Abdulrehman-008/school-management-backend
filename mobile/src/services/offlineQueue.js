@@ -9,7 +9,22 @@ export const enqueue = async (markEntry) => {
     try {
         const existing = await AsyncStorage.getItem(QUEUE_KEY);
         const queue = existing ? JSON.parse(existing) : [];
-        queue.push({ ...markEntry, queued_at: Date.now() });
+        
+        // Check if an entry for this student, subject, date, and exam already exists
+        const existingIdx = queue.findIndex(
+            (item) =>
+                String(item.student_id) === String(markEntry.student_id) &&
+                String(item.subject_id) === String(markEntry.subject_id) &&
+                String(item.exam_date || item.term || '').trim().toLowerCase() === String(markEntry.exam_date || markEntry.term || '').trim().toLowerCase() &&
+                String(item.exam_name || '').trim().toLowerCase() === String(markEntry.exam_name || '').trim().toLowerCase()
+        );
+
+        if (existingIdx >= 0) {
+            queue[existingIdx] = { ...markEntry, queued_at: Date.now() };
+        } else {
+            queue.push({ ...markEntry, queued_at: Date.now() });
+        }
+
         await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
         return queue.length;
     } catch (err) {

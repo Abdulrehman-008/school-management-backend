@@ -6,6 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a4a1a"
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -13,7 +18,7 @@
       "package": "com.inovatters.schoolmanagement",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#1a237e",
+        "backgroundColor": "#1a4a1a",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "permissions": [
@@ -25,6 +30,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e6f8f0c7-397e-40db-b1a6-75139fe21bc6"
+      }
     }
   }
 }

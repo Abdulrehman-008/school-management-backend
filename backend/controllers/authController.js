@@ -157,3 +157,61 @@ exports.changePassword = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
+// 7. Admin Reset Teacher Credentials (no old password required)
+exports.adminResetCredentials = async (req, res) => {
+    const { id } = req.params;
+    const { new_username, new_password } = req.body;
+
+    if (!new_username && !new_password) {
+        return res.status(400).json({ message: 'Provide at least a new username or new password.' });
+    }
+
+    try {
+        // Check teacher exists
+        const teacherResult = await pool.query(
+            "SELECT * FROM users WHERE id=$1 AND role IN ('teacher','class_teacher')",
+            [id]
+        );
+        if (teacherResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Teacher not found.' });
+        }
+
+        // If changing username, check it's not taken by another user
+        if (new_username) {
+            const conflict = await pool.query(
+                'SELECT id FROM users WHERE LOWER(username) = LOWER($1) AND id != $2',
+                [new_username.trim(), id]
+            );
+            if (conflict.rows.length > 0) {
+                return res.status(400).json({ message: 'Username already taken by another user.' });
+            }
+        }
+
+        // Build dynamic update query
+        const updates = [];
+        const values = [];
+        let idx = 1;
+
+        if (new_username) {
+            updates.push(`username = $${idx++}`);
+            values.push(new_username.trim());
+        }
+        if (new_password) {
+            const hashed = await bcrypt.hash(new_password, 10);
+            updates.push(`password = $${idx++}`);
+            values.push(hashed);
+        }
+
+        values.push(id);
+        await pool.query(
+            `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx}`,
+            values
+        );
+
+        res.json({ message: 'Teacher credentials updated successfully.' });
+    } catch (err) {
+        console.error('Admin Reset Credentials Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};

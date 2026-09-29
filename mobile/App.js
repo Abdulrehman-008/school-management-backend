@@ -5,8 +5,10 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import NetInfo from '@react-native-community/netinfo';
 
 import { loadSession } from './src/services/authStorage';
+import { checkAndSyncPendingMarks } from './src/services/syncService';
 
 import LoginScreen from './LoginScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
@@ -21,6 +23,7 @@ import ClassResultScreen from './src/screens/ClassResultScreen';
 import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
 
 const Stack = createStackNavigator();
+const SYNC_INTERVAL_MS = 15 * 60 * 1000; // Check and sync every 15 minutes
 
 export default function App() {
   const [initialRoute, setInitialRoute] = useState(null); // null = loading
@@ -38,6 +41,29 @@ export default function App() {
         setInitialRoute('Login');
       }
     })();
+  }, []);
+
+  // Global background auto-sync manager
+  useEffect(() => {
+    // 1. Run sync check immediately on app startup
+    checkAndSyncPendingMarks();
+
+    // 2. Automatically sync whenever the device connects to the internet
+    const unsubscribeNetInfo = NetInfo.addEventListener((state) => {
+      if (state.isConnected) {
+        checkAndSyncPendingMarks();
+      }
+    });
+
+    // 3. Periodic timer: check internet every 15 minutes and sync pending data
+    const intervalId = setInterval(() => {
+      checkAndSyncPendingMarks();
+    }, SYNC_INTERVAL_MS);
+
+    return () => {
+      unsubscribeNetInfo();
+      clearInterval(intervalId);
+    };
   }, []);
 
   if (initialRoute === null) {

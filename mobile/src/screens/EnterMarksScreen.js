@@ -15,10 +15,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
 import api from '../services/api';
 import { enqueue, getQueue } from '../services/offlineQueue';
-import { syncPendingMarks } from '../services/syncService';
+import { checkAndSyncPendingMarks, subscribeSyncEvents } from '../services/syncService';
 
-const DARK_BLUE = '#1565c0';
-const TERMS = ['Term 1', 'Term 2', 'Term 3', 'Final'];
+const DARK_GREEN = '#1a4a1a';
+const GOLD = '#FFD700';
+
+const getTodayDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function EnterMarksScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -32,8 +40,8 @@ export default function EnterMarksScreen({ navigation, route }) {
 
   // Form state
   const [selStudent, setSelStudent] = useState(null);
-  const [selTerm, setSelTerm] = useState('Term 1');
-  const [examName, setExamName] = useState('Annual Examination');
+  const [examName, setExamName] = useState('Monthly Test');
+  const [examDate, setExamDate] = useState(getTodayDateString());
   const [marksObtained, setMarksObtained] = useState('');
   const [totalMarks, setTotalMarks] = useState('100');
   const [saving, setSaving] = useState(false);
@@ -48,16 +56,31 @@ export default function EnterMarksScreen({ navigation, route }) {
   };
 
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      const online = Boolean(state.isConnected && state.isInternetReachable !== false);
+    // 1. Fetch current network status immediately on mount
+    NetInfo.fetch().then((state) => {
+      setIsOnline(Boolean(state.isConnected));
+    });
+
+    // 2. Listen to network transitions
+    const unsubscribeNetInfo = NetInfo.addEventListener((state) => {
+      const online = Boolean(state.isConnected);
       setIsOnline(online);
       if (online) {
-        syncPendingMarks().then(() => updatePendingCount());
+        checkAndSyncPendingMarks().then(() => updatePendingCount());
       }
     });
 
+    // 3. Listen to global periodic sync events from App.js
+    const unsubscribeSync = subscribeSyncEvents(() => {
+      updatePendingCount();
+    });
+
     updatePendingCount();
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribeNetInfo();
+      unsubscribeSync();
+    };
   }, []);
 
   const fetchStudents = useCallback(async () => {
@@ -106,35 +129,27 @@ export default function EnterMarksScreen({ navigation, route }) {
     }
 
     setSaving(true);
+    const cleanDate = examDate.trim() || getTodayDateString();
+    const cleanExam = examName.trim() || 'Monthly Test';
+
     const payload = {
       student_id: selStudent.id,
       subject_id,
-      term: selTerm,
-      exam_name: examName.trim() || 'General Exam',
+      term: cleanDate,
+      exam_date: cleanDate,
+      exam_name: cleanExam,
       marks_obtained: obtained,
       total_marks: total,
     };
 
     try {
-      if (isOnline) {
-        await api.post('/results/add', payload);
-        Alert.alert('Success', `Marks saved for Roll #${selStudent.roll_no} - ${selStudent.name}!`, [
-          {
-            text: 'Enter Next',
-            onPress: () => {
-              setSelStudent(null);
-              setMarksObtained('');
-              setSearchQuery('');
-            },
-          },
-          { text: 'Done', onPress: () => navigation.goBack() },
-        ]);
-      } else {
+      // 1. If device is explicitly disconnected, queue offline immediately
+      if (!isOnline) {
         await enqueue(payload);
         await updatePendingCount();
         Alert.alert(
           'Saved Offline',
-          `No internet. Marks saved to device queue for Roll #${selStudent.roll_no} - ${selStudent.name}. Will sync automatically when back online.`,
+          `No internet connection. Marks saved to device queue for Roll #${selStudent.roll_no} - ${selStudent.name}. It will automatically sync to the server when internet is available or during the 15-minute sync check.`,
           [
             {
               text: 'Enter Next',
@@ -147,14 +162,53 @@ export default function EnterMarksScreen({ navigation, route }) {
             { text: 'Done', onPress: () => navigation.goBack() },
           ]
         );
+        return;
       }
+
+      // 2. Online: Try posting directly to server first (Network-First)
+      await api.post('/results/add', payload);
+      Alert.alert('Success', `Marks saved for Roll #${selStudent.roll_no} - ${selStudent.name}!`, [
+        {
+          text: 'Enter Next',
+          onPress: () => {
+            setSelStudent(null);
+            setMarksObtained('');
+            setSearchQuery('');
+          },
+        },
+        { text: 'Done', onPress: () => navigation.goBack() },
+      ]);
     } catch (err) {
-      await enqueue(payload);
-      await updatePendingCount();
-      Alert.alert(
-        'Offline Queued',
-        'Server unreachable. Marks safely stored on device and will sync automatically.'
-      );
+      // Differentiate genuine network failure vs server response error
+      const isNetworkErr =
+        Boolean(err.isNetworkError) ||
+        (!err.response && (
+          err.message?.includes('Network') ||
+          err.message?.includes('timed out')
+        ));
+
+      if (isNetworkErr) {
+        await enqueue(payload);
+        await updatePendingCount();
+        Alert.alert(
+          'Saved Offline',
+          `Server unreachable (${err.message}). Marks safely stored on device and will automatically sync within 15 minutes or when connection is restored.`,
+          [
+            {
+              text: 'Enter Next',
+              onPress: () => {
+                setSelStudent(null);
+                setMarksObtained('');
+                setSearchQuery('');
+              },
+            },
+            { text: 'Done', onPress: () => navigation.goBack() },
+          ]
+        );
+      } else {
+        // Validation / Server error (e.g., student not found, 500 error)
+        Alert.alert('Error', err.message || 'Failed to save marks on server.');
+      }
     } finally {
       setSaving(false);
     }
@@ -192,7 +246,7 @@ export default function EnterMarksScreen({ navigation, route }) {
           </Text>
           {isOnline && (
             <TouchableOpacity
-              onPress={() => syncPendingMarks().then(() => updatePendingCount())}
+              onPress={() => checkAndSyncPendingMarks().then(() => updatePendingCount())}
             >
               <Text style={styles.syncBtnText}>Sync Now</Text>
             </TouchableOpacity>
@@ -222,7 +276,7 @@ export default function EnterMarksScreen({ navigation, route }) {
         </View>
 
         {loading ? (
-          <ActivityIndicator color={DARK_BLUE} />
+          <ActivityIndicator color={DARK_GREEN} />
         ) : (
           <ScrollView style={styles.studentList} nestedScrollEnabled>
             {filteredStudents.length === 0 ? (
@@ -261,26 +315,25 @@ export default function EnterMarksScreen({ navigation, route }) {
         <Text style={[styles.sectionLabel, { marginTop: 18 }]}>2. Exam Name</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g. Annual Examination 2024"
+          placeholder="e.g. Monthly Test, Annual Exam, Daily Test"
           value={examName}
           onChangeText={setExamName}
         />
 
-        {/* Step 3: Term */}
-        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>3. Select Term</Text>
-        <View style={styles.termRow}>
-          {TERMS.map((t) => (
-            <TouchableOpacity
-              key={t}
-              style={[styles.termChip, selTerm === t && styles.termChipSelected]}
-              onPress={() => setSelTerm(t)}
-            >
-              <Text style={[styles.termChipText, selTerm === t && styles.termChipTextSelected]}>
-                {t}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        {/* Step 3: Exam Date */}
+        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>3. Exam Date (تاریخ)</Text>
+        <View style={styles.dateInputContainer}>
+          <Text style={styles.dateIcon}>📅</Text>
+          <TextInput
+            style={styles.dateInput}
+            placeholder="YYYY-MM-DD"
+            value={examDate}
+            onChangeText={setExamDate}
+          />
         </View>
+        <Text style={styles.dateHint}>
+          💡 تاریخ کی بنیاد پر ہر ٹیسٹ الگ ریکارڈ ہوگا (مثلاً 2026-09-29)
+        </Text>
 
         {/* Step 4: Marks */}
         <Text style={[styles.sectionLabel, { marginTop: 18 }]}>4. Enter Marks</Text>
@@ -311,7 +364,7 @@ export default function EnterMarksScreen({ navigation, route }) {
         {selStudent && marksObtained && totalMarks && (
           <View style={styles.preview}>
             <Text style={styles.previewText}>
-              📝 Roll #{selStudent.roll_no} - {selStudent.name} • {examName} • {marksObtained}/{totalMarks}
+              📝 Roll #{selStudent.roll_no} - {selStudent.name} • {examName} • 📅 {examDate} • {marksObtained}/{totalMarks}
               {' '}({((parseFloat(marksObtained) / parseFloat(totalMarks)) * 100).toFixed(1)}%)
             </Text>
           </View>
@@ -332,9 +385,9 @@ export default function EnterMarksScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f4ff' },
+  container: { flex: 1, backgroundColor: '#f0fdf4' },
   header: {
-    backgroundColor: DARK_BLUE,
+    backgroundColor: DARK_GREEN,
     paddingHorizontal: 16,
     paddingBottom: 14,
     flexDirection: 'row',
@@ -352,7 +405,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
   headerTitle: { color: '#fff', fontSize: 17, fontWeight: 'bold', textAlign: 'center' },
-  headerSub: { color: '#90caf9', fontSize: 11, textAlign: 'center', marginTop: 1 },
+  headerSub: { color: GOLD, fontSize: 11, textAlign: 'center', marginTop: 1, fontWeight: '600' },
   networkBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   networkDot: { fontSize: 14 },
   networkText: { color: '#fff', fontSize: 11, fontWeight: '600' },
@@ -367,16 +420,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#ffe0b2',
   },
   pendingText: { fontSize: 12, color: '#e65100', fontWeight: '600' },
-  syncBtnText: { fontSize: 12, color: '#1565c0', fontWeight: 'bold', textDecorationLine: 'underline' },
+  syncBtnText: { fontSize: 12, color: DARK_GREEN, fontWeight: 'bold', textDecorationLine: 'underline' },
   content: { padding: 18, paddingBottom: 30 },
-  sectionLabel: { fontSize: 14, fontWeight: '700', color: '#333', marginBottom: 10 },
+  sectionLabel: { fontSize: 14, fontWeight: '700', color: '#1a4a1a', marginBottom: 10 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#d1d5db',
+    borderColor: '#c8e6c9',
     paddingHorizontal: 12,
     marginBottom: 10,
     height: 44,
@@ -384,7 +437,7 @@ const styles = StyleSheet.create({
   searchIcon: { fontSize: 15, marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, color: '#222' },
   clearSearch: { color: '#888', fontSize: 16, paddingHorizontal: 6 },
-  studentList: { maxHeight: 200, backgroundColor: '#fff', borderRadius: 12, elevation: 2 },
+  studentList: { maxHeight: 200, backgroundColor: '#fff', borderRadius: 12, elevation: 2, borderWidth: 1, borderColor: '#e0e7e1' },
   studentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -392,22 +445,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  studentRowSelected: { backgroundColor: '#e8eaf6' },
+  studentRowSelected: { backgroundColor: '#e8f5e9' },
   rollBadge: {
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#e8eaf6',
+    backgroundColor: '#e8f5e9',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  rollBadgeSelected: { backgroundColor: DARK_BLUE },
-  rollText: { color: '#1a237e', fontWeight: '700', fontSize: 13 },
+  rollBadgeSelected: { backgroundColor: DARK_GREEN },
+  rollText: { color: '#1b5e20', fontWeight: '700', fontSize: 13 },
   studentName: { fontSize: 15, color: '#333', fontWeight: '500' },
-  studentNameSelected: { fontWeight: '700', color: DARK_BLUE },
+  studentNameSelected: { fontWeight: '700', color: DARK_GREEN },
   fatherSub: { fontSize: 11, color: '#777', marginTop: 1 },
-  checkmark: { color: DARK_BLUE, fontSize: 18, fontWeight: '700' },
+  checkmark: { color: DARK_GREEN, fontSize: 18, fontWeight: '700' },
   noStudentsText: { padding: 16, color: '#888', fontStyle: 'italic', textAlign: 'center' },
   input: {
     height: 46,
@@ -418,16 +471,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     backgroundColor: '#fff',
   },
+  dateInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 46,
+    borderWidth: 1.5,
+    borderColor: '#81c784',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+  },
+  dateIcon: { fontSize: 16, marginRight: 8 },
+  dateInput: { flex: 1, fontSize: 15, color: '#1a4a1a', fontWeight: '600' },
+  dateHint: { fontSize: 11, color: '#555', marginTop: 4, marginLeft: 2 },
   termRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   termChip: {
     borderWidth: 1.5,
-    borderColor: '#ddd',
+    borderColor: '#c8e6c9',
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 7,
     backgroundColor: '#fff',
   },
-  termChipSelected: { backgroundColor: DARK_BLUE, borderColor: DARK_BLUE },
+  termChipSelected: { backgroundColor: DARK_GREEN, borderColor: DARK_GREEN },
   termChipText: { color: '#555', fontSize: 13 },
   termChipTextSelected: { color: '#fff', fontWeight: '600' },
   marksRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
@@ -436,7 +502,7 @@ const styles = StyleSheet.create({
   marksInput: {
     height: 50,
     borderWidth: 1.5,
-    borderColor: '#ddd',
+    borderColor: '#c8e6c9',
     borderRadius: 10,
     paddingHorizontal: 12,
     fontSize: 20,
@@ -451,16 +517,17 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#4caf50',
+    borderLeftColor: '#2e7d32',
   },
-  previewText: { fontSize: 13, color: '#2e7d32', fontWeight: '600' },
+  previewText: { fontSize: 13, color: '#1b5e20', fontWeight: '600' },
   submitBtn: {
     height: 50,
-    backgroundColor: DARK_BLUE,
+    backgroundColor: DARK_GREEN,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 20,
+    elevation: 3,
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
