@@ -283,11 +283,6 @@ export default function ReportCardScreen({ navigation }) {
     }
   };
 
-  const totalObtained = dedupedResults.reduce((sum, r) => sum + Number(r.marks_obtained), 0);
-  const totalMax = dedupedResults.reduce((sum, r) => sum + Number(r.total_marks), 0);
-  const overallPct = totalMax > 0 ? ((totalObtained / totalMax) * 100).toFixed(1) : null;
-  const gradeInfo = overallPct ? getGrade(parseFloat(overallPct)) : null;
-
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20) + 8;
 
   return (
