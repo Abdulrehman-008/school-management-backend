@@ -18,7 +18,7 @@ import api from '../services/api';
 const DARK_GREEN = '#1a4a1a';
 const GOLD = '#FFD700';
 
-function buildReportHTML({ schoolName, title, className, teacherName, subjectName, results, averagePct, isSubjectView }) {
+function buildReportHTML({ schoolName, title, className, teacherName, subjectName, examName, examDate, results, averagePct, isSubjectView }) {
   const rows = results
     .map(
       (s, idx) => `
@@ -27,7 +27,7 @@ function buildReportHTML({ schoolName, title, className, teacherName, subjectNam
         <td>${s.roll_no}</td>
         <td style="font-weight:600;">${s.student_name}</td>
         <td>${s.father_name || 'N/A'}</td>
-        <td>${s.total_obtained || 0} / ${s.total_max || 0}</td>
+        <td>${s.total_obtained || s.marks_obtained || 0} / ${s.total_max || s.total_marks || 0}</td>
         <td style="font-weight:bold; color:${Number(s.percentage) >= 50 ? '#1b5e20' : '#c62828'};">${s.percentage || 0}%</td>
       </tr>`
     )
@@ -44,6 +44,28 @@ function buildReportHTML({ schoolName, title, className, teacherName, subjectNam
       .header h1 { margin: 0; color: #1a4a1a; font-size: 24px; }
       .header h2 { margin: 4px 0 0 0; color: #2e7d32; font-size: 16px; font-weight: normal; }
       .header p { margin: 4px 0 0 0; color: #666; font-size: 13px; }
+      .exam-banner {
+        display: inline-block;
+        background: #e8f5e9;
+        border: 2px solid #1a4a1a;
+        border-radius: 8px;
+        padding: 6px 20px;
+        margin-top: 8px;
+        text-align: center;
+      }
+      .exam-title {
+        color: #1a4a1a;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+      }
+      .exam-date {
+        color: #2e7d32;
+        font-size: 12px;
+        font-weight: bold;
+        margin-top: 2px;
+      }
       .meta { display: flex; justify-content: space-between; background: #e8f5e9; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #1a4a1a; }
       .meta-item { font-size: 13px; }
       .meta-label { color: #555; font-size: 11px; text-transform: uppercase; font-weight: bold; }
@@ -60,6 +82,12 @@ function buildReportHTML({ schoolName, title, className, teacherName, subjectNam
       <h1>${schoolName}</h1>
       <h2>${title}</h2>
       <p>District Hafizabad • Official Evaluation Sheet</p>
+      ${examName || examDate ? `
+      <div class="exam-banner">
+        <div class="exam-title">${examName || 'TEST EVALUATION'}</div>
+        ${examDate ? `<div class="exam-date">📅 Date: ${examDate}</div>` : ''}
+      </div>
+      ` : ''}
     </div>
 
     <div class="meta">
@@ -72,6 +100,12 @@ function buildReportHTML({ schoolName, title, className, teacherName, subjectNam
         <div class="meta-label">Subject</div>
         <div class="meta-val">${subjectName || 'N/A'}</div>
       </div>
+      ${examDate ? `
+      <div class="meta-item">
+        <div class="meta-label">Exam Date</div>
+        <div class="meta-val">${examDate}</div>
+      </div>
+      ` : ''}
       ` : `
       <div class="meta-item">
         <div class="meta-label">Class Incharge</div>
@@ -125,6 +159,7 @@ export default function ClassResultScreen({ navigation, route }) {
       : null
   );
   const [results, setResults] = useState([]);
+  const [selectedExamKey, setSelectedExamKey] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
@@ -145,14 +180,14 @@ export default function ClassResultScreen({ navigation, route }) {
     setLoading(true);
     try {
       if (isSubjectView && subjectId) {
-        // Try subject-specific endpoint first
+        // Fetch detailed results for this subject
         try {
           const res = await api.get(`/results/class/${classId}/subject/${subjectId}`);
           setResults(res.data);
           setLoading(false);
           return;
         } catch (e) {
-          // If 404 or backend route not ready, fetch class students and filter
+          // Fallback if needed
           const studentsRes = await api.get(`/students/class/${classId}`);
           const students = studentsRes.data;
 
@@ -170,6 +205,8 @@ export default function ClassResultScreen({ navigation, route }) {
                   father_name: st.father_name,
                   class_name: routeParams.class_name,
                   subject_name: subjectName,
+                  exam_name: mark?.exam_name || 'General Exam',
+                  exam_date: mark?.exam_date || mark?.term || '',
                   total_obtained: mark ? mark.marks_obtained : 0,
                   total_max: mark ? mark.total_marks : 100,
                   percentage: mark && mark.total_marks > 0
@@ -217,8 +254,51 @@ export default function ClassResultScreen({ navigation, route }) {
     }
   }, [selectedClass, fetchResults]);
 
-  const totalPercentages = results.reduce((acc, curr) => acc + Number(curr.percentage || 0), 0);
-  const averagePct = results.length > 0 ? (totalPercentages / results.length).toFixed(1) : '0.0';
+  // Group results by distinct Exam Name + Exam Date when in Subject View
+  const examGroups = React.useMemo(() => {
+    if (!isSubjectView || !results || results.length === 0) return [];
+    const map = new Map();
+    results.forEach((r) => {
+      const examNameStr = (r.exam_name || 'General Exam').trim();
+      const dateStr = (r.exam_date || r.term || '').trim();
+      const key = `${examNameStr}__${dateStr}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          exam_name: examNameStr,
+          exam_date: dateStr,
+          students: [],
+        });
+      }
+      map.get(key).students.push(r);
+    });
+    return Array.from(map.values());
+  }, [results, isSubjectView]);
+
+  // Default to first exam group if not set
+  useEffect(() => {
+    if (isSubjectView && examGroups.length > 0) {
+      if (!selectedExamKey || !examGroups.some((g) => g.key === selectedExamKey)) {
+        setSelectedExamKey(examGroups[0].key);
+      }
+    }
+  }, [isSubjectView, examGroups, selectedExamKey]);
+
+  const activeExam = React.useMemo(() => {
+    if (!isSubjectView) return null;
+    return examGroups.find((g) => g.key === selectedExamKey) || examGroups[0] || null;
+  }, [isSubjectView, examGroups, selectedExamKey]);
+
+  // Students to display in the table
+  const displayedStudents = React.useMemo(() => {
+    if (isSubjectView) {
+      return activeExam ? activeExam.students : [];
+    }
+    return results;
+  }, [isSubjectView, activeExam, results]);
+
+  const totalPercentages = displayedStudents.reduce((acc, curr) => acc + Number(curr.percentage || 0), 0);
+  const averagePct = displayedStudents.length > 0 ? (totalPercentages / displayedStudents.length).toFixed(1) : '0.0';
   const teacherName =
     routeParams.teacherName ||
     results[0]?.class_teacher_name ||
@@ -226,32 +306,37 @@ export default function ClassResultScreen({ navigation, route }) {
     'Not Assigned';
 
   const handleGeneratePdf = async () => {
-    if (!selectedClass || results.length === 0) {
+    if (!selectedClass || displayedStudents.length === 0) {
       Alert.alert('Notice', 'No student results to generate PDF.');
       return;
     }
 
     setGeneratingPdf(true);
     try {
+      const examTitle = isSubjectView && activeExam
+        ? `Subject Result: ${subjectName} — ${activeExam.exam_name}`
+        : (isSubjectView ? `Subject Result: ${subjectName}` : 'Official Class Result Sheet (Whole Class)');
+
       const html = buildReportHTML({
         schoolName: 'Govt. High School Pindi Bawray',
-        title: isSubjectView
-          ? `Subject Result: ${subjectName}`
-          : 'Official Class Result Sheet (Whole Class)',
+        title: examTitle,
         className: selectedClass.class_name,
         teacherName,
         subjectName,
-        results,
+        examName: activeExam?.exam_name,
+        examDate: activeExam?.exam_date,
+        results: displayedStudents,
         averagePct,
         isSubjectView,
       });
 
       const { uri } = await Print.printToFileAsync({ html, base64: false });
 
+      const safeExam = activeExam ? `_${activeExam.exam_name}_${activeExam.exam_date}`.replace(/[^a-zA-Z0-9_-]/g, '_') : '';
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',
-          dialogTitle: `${selectedClass.class_name} Result Sheet`,
+          dialogTitle: `${selectedClass.class_name} ${subjectName || ''}${safeExam} Result Sheet`,
           UTI: '.pdf',
         });
       } else {
@@ -340,6 +425,57 @@ export default function ClassResultScreen({ navigation, route }) {
         </View>
       )}
 
+      {/* Monthly Tests & Exams Selector for Subject View */}
+      {isSubjectView && (
+        <View style={styles.examPickerSection}>
+          <View style={styles.examPickerHeaderRow}>
+            <Text style={styles.examPickerTitle}>
+              📅 Monthly Tests & Exams ({examGroups.length})
+            </Text>
+            <Text style={styles.examPickerSub}>
+              ٹیسٹ منتخب کریں
+            </Text>
+          </View>
+
+          {examGroups.length === 0 && !loading ? (
+            <View style={styles.noExamsBox}>
+              <Text style={styles.noExamsText}>No exams/tests recorded for {subjectName} yet.</Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.examChipRow}>
+              {examGroups.map((group) => {
+                const isSelected = activeExam?.key === group.key;
+                return (
+                  <TouchableOpacity
+                    key={group.key}
+                    style={[styles.examCard, isSelected && styles.examCardActive]}
+                    onPress={() => setSelectedExamKey(group.key)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.examCardTop}>
+                      <View style={[styles.examBadgePill, isSelected && styles.examBadgePillActive]}>
+                        <Text style={[styles.examBadgePillText, isSelected && styles.examBadgePillTextActive]}>
+                          {isSelected ? '✓ SELECTED' : 'TEST'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.examCardName, isSelected && styles.examCardNameActive]} numberOfLines={1}>
+                      {group.exam_name}
+                    </Text>
+                    <Text style={[styles.examCardDate, isSelected && styles.examCardDateActive]}>
+                      📅 {group.exam_date || 'N/A'}
+                    </Text>
+                    <Text style={[styles.examCardCount, isSelected && styles.examCardCountActive]}>
+                      👥 {group.students.length} Student{group.students.length === 1 ? '' : 's'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator color={DARK_GREEN} size="large" />
@@ -347,7 +483,7 @@ export default function ClassResultScreen({ navigation, route }) {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false}>
-          {results.length === 0 ? (
+          {displayedStudents.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyIcon}>📊</Text>
               <Text style={styles.emptyText}>No marks found for this selection.</Text>
@@ -359,6 +495,18 @@ export default function ClassResultScreen({ navigation, route }) {
             </View>
           ) : (
             <View style={styles.tableCard}>
+              {/* Active Exam Label Bar */}
+              {isSubjectView && activeExam && (
+                <View style={styles.activeExamBar}>
+                  <Text style={styles.activeExamBarText}>
+                    📝 {activeExam.exam_name} • 📅 {activeExam.exam_date || 'N/A'}
+                  </Text>
+                  <Text style={styles.activeExamBarCount}>
+                    {displayedStudents.length} Students
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.tableHeaderRow}>
                 <Text style={[styles.th, { width: 42 }]}>Roll</Text>
                 <Text style={[styles.th, { flex: 2 }]}>Student Name</Text>
@@ -367,9 +515,9 @@ export default function ClassResultScreen({ navigation, route }) {
                 <Text style={[styles.th, { width: 56, textAlign: 'right' }]}>%</Text>
               </View>
 
-              {results.map((item, index) => (
+              {displayedStudents.map((item, index) => (
                 <View
-                  key={item.student_id || index}
+                  key={item.id || item.student_id || index}
                   style={[styles.tableRow, index % 2 === 1 && { backgroundColor: '#f9fcf9' }]}
                 >
                   <Text style={[styles.td, { width: 42, fontWeight: '700', color: DARK_GREEN }]}>
@@ -382,7 +530,7 @@ export default function ClassResultScreen({ navigation, route }) {
                     {item.father_name || 'N/A'}
                   </Text>
                   <Text style={[styles.td, { width: 72, textAlign: 'right', fontWeight: '500' }]}>
-                    {item.total_obtained}/{item.total_max}
+                    {item.total_obtained || item.marks_obtained}/{item.total_max || item.total_marks}
                   </Text>
                   <Text
                     style={[
@@ -404,6 +552,22 @@ export default function ClassResultScreen({ navigation, route }) {
                 <Text style={styles.avgFooterText}>Average Percentage:</Text>
                 <Text style={styles.avgFooterValue}>{averagePct}%</Text>
               </View>
+
+              {/* Action Button: Print This Exam's Result */}
+              <TouchableOpacity
+                style={[styles.bottomPdfBtn, generatingPdf && { opacity: 0.6 }]}
+                onPress={handleGeneratePdf}
+                disabled={generatingPdf}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.bottomPdfBtnText}>
+                  {generatingPdf
+                    ? 'Generating PDF...'
+                    : isSubjectView && activeExam
+                    ? `📄 Print ${activeExam.exam_name} Result Sheet`
+                    : '📄 Print Class Result Sheet'}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
         </ScrollView>
@@ -658,5 +822,152 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1b5e20',
+  },
+
+  /* ── Monthly Tests Picker Styles ── */
+  examPickerSection: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  examPickerHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  examPickerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: DARK_GREEN,
+  },
+  examPickerSub: {
+    fontSize: 11,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  noExamsBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e0e7e1',
+    alignItems: 'center',
+  },
+  noExamsText: {
+    fontSize: 12,
+    color: '#888',
+    fontStyle: 'italic',
+  },
+  examChipRow: {
+    flexDirection: 'row',
+    paddingBottom: 6,
+  },
+  examCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginRight: 10,
+    minWidth: 140,
+    borderWidth: 1.5,
+    borderColor: '#c8e6c9',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+  },
+  examCardActive: {
+    backgroundColor: '#e8f5e9',
+    borderColor: DARK_GREEN,
+    borderWidth: 2,
+  },
+  examCardTop: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  examBadgePill: {
+    backgroundColor: '#f1f8e9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#dcedc8',
+  },
+  examBadgePillActive: {
+    backgroundColor: DARK_GREEN,
+    borderColor: DARK_GREEN,
+  },
+  examBadgePillText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#558b2f',
+  },
+  examBadgePillTextActive: {
+    color: '#ffffff',
+  },
+  examCardName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#222',
+  },
+  examCardNameActive: {
+    color: DARK_GREEN,
+    fontWeight: '800',
+  },
+  examCardDate: {
+    fontSize: 11,
+    color: '#2e7d32',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  examCardDateActive: {
+    color: '#1b5e20',
+  },
+  examCardCount: {
+    fontSize: 10,
+    color: '#777',
+    marginTop: 4,
+  },
+  examCardCountActive: {
+    color: '#33691e',
+    fontWeight: '600',
+  },
+
+  /* ── Active Exam Bar inside Table Card ── */
+  activeExamBar: {
+    backgroundColor: '#e8f5e9',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#c8e6c9',
+  },
+  activeExamBarText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: DARK_GREEN,
+  },
+  activeExamBarCount: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2e7d32',
+  },
+
+  /* ── Bottom PDF Print Button ── */
+  bottomPdfBtn: {
+    backgroundColor: DARK_GREEN,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomPdfBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    letterSpacing: 0.3,
   },
 });
