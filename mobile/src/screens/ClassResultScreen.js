@@ -254,9 +254,9 @@ export default function ClassResultScreen({ navigation, route }) {
     }
   }, [selectedClass, fetchResults]);
 
-  // Group results by distinct Exam Name + Exam Date when in Subject View
+  // Group results by distinct Exam Name + Exam Date (works for both Whole Class and Subject View)
   const examGroups = React.useMemo(() => {
-    if (!isSubjectView || !results || results.length === 0) return [];
+    if (!results || results.length === 0) return [];
     const map = new Map();
     results.forEach((r) => {
       const examNameStr = (r.exam_name || 'General Exam').trim();
@@ -273,29 +273,25 @@ export default function ClassResultScreen({ navigation, route }) {
       map.get(key).students.push(r);
     });
     return Array.from(map.values());
-  }, [results, isSubjectView]);
+  }, [results]);
 
   // Default to first exam group if not set
   useEffect(() => {
-    if (isSubjectView && examGroups.length > 0) {
+    if (examGroups.length > 0) {
       if (!selectedExamKey || !examGroups.some((g) => g.key === selectedExamKey)) {
         setSelectedExamKey(examGroups[0].key);
       }
     }
-  }, [isSubjectView, examGroups, selectedExamKey]);
+  }, [examGroups, selectedExamKey]);
 
   const activeExam = React.useMemo(() => {
-    if (!isSubjectView) return null;
     return examGroups.find((g) => g.key === selectedExamKey) || examGroups[0] || null;
-  }, [isSubjectView, examGroups, selectedExamKey]);
+  }, [examGroups, selectedExamKey]);
 
   // Students to display in the table
   const displayedStudents = React.useMemo(() => {
-    if (isSubjectView) {
-      return activeExam ? activeExam.students : [];
-    }
-    return results;
-  }, [isSubjectView, activeExam, results]);
+    return activeExam ? activeExam.students : results;
+  }, [activeExam, results]);
 
   const totalPercentages = displayedStudents.reduce((acc, curr) => acc + Number(curr.percentage || 0), 0);
   const averagePct = displayedStudents.length > 0 ? (totalPercentages / displayedStudents.length).toFixed(1) : '0.0';
@@ -313,8 +309,10 @@ export default function ClassResultScreen({ navigation, route }) {
 
     setGeneratingPdf(true);
     try {
-      const examTitle = isSubjectView && activeExam
-        ? `Subject Result: ${subjectName} — ${activeExam.exam_name}`
+      const examTitle = activeExam
+        ? (isSubjectView
+            ? `Subject Result: ${subjectName} — ${activeExam.exam_name}`
+            : `Class Result Sheet: ${selectedClass.class_name} — ${activeExam.exam_name}`)
         : (isSubjectView ? `Subject Result: ${subjectName}` : 'Official Class Result Sheet (Whole Class)');
 
       const html = buildReportHTML({
@@ -336,7 +334,7 @@ export default function ClassResultScreen({ navigation, route }) {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',
-          dialogTitle: `${selectedClass.class_name} ${subjectName || ''}${safeExam} Result Sheet`,
+          dialogTitle: `${selectedClass.class_name} ${isSubjectView ? (subjectName || '') : 'Class'}${safeExam} Result Sheet`,
           UTI: '.pdf',
         });
       } else {
@@ -425,8 +423,8 @@ export default function ClassResultScreen({ navigation, route }) {
         </View>
       )}
 
-      {/* Monthly Tests & Exams Selector for Subject View */}
-      {isSubjectView && (
+      {/* Monthly Tests & Exams Selector (Works for both Whole Class & Subject View) */}
+      {Boolean(selectedClass) && (
         <View style={styles.examPickerSection}>
           <View style={styles.examPickerHeaderRow}>
             <Text style={styles.examPickerTitle}>
@@ -439,7 +437,9 @@ export default function ClassResultScreen({ navigation, route }) {
 
           {examGroups.length === 0 && !loading ? (
             <View style={styles.noExamsBox}>
-              <Text style={styles.noExamsText}>No exams/tests recorded for {subjectName} yet.</Text>
+              <Text style={styles.noExamsText}>
+                No exams/tests recorded for {isSubjectView ? subjectName : selectedClass.class_name} yet.
+              </Text>
             </View>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.examChipRow}>
@@ -496,7 +496,7 @@ export default function ClassResultScreen({ navigation, route }) {
           ) : (
             <View style={styles.tableCard}>
               {/* Active Exam Label Bar */}
-              {isSubjectView && activeExam && (
+              {activeExam && (
                 <View style={styles.activeExamBar}>
                   <Text style={styles.activeExamBarText}>
                     📝 {activeExam.exam_name} • 📅 {activeExam.exam_date || 'N/A'}
@@ -563,7 +563,7 @@ export default function ClassResultScreen({ navigation, route }) {
                 <Text style={styles.bottomPdfBtnText}>
                   {generatingPdf
                     ? 'Generating PDF...'
-                    : isSubjectView && activeExam
+                    : activeExam
                     ? `📄 Print ${activeExam.exam_name} Result Sheet`
                     : '📄 Print Class Result Sheet'}
                 </Text>
